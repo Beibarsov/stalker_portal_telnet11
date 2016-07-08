@@ -8,7 +8,7 @@
 
     <target name="build" description="Build task">
 
-        <exec command="apt-get -y install php-soap php5-intl php-gettext php5-memcache php5-curl php5-mysql php5-mcrypt php5-tidy php5-imagick php5-geoip curl"
+        <exec command="apt-get -y install php-soap php5-intl php-gettext php5-memcache php5-curl php5-mysql php5-tidy php5-imagick php5-geoip curl"
               level="info" outputProperty="install.error.msg" returnProperty="install.error.code"/>
 
         <if>
@@ -131,7 +131,7 @@
             </then>
         </if>
 
-        <exec command="export MYSQL_PWD=${mysql_pass}; ${progs.mysql} -P${mysql_port} ${protocol_str} -h${mysql_host} -u${mysql_user} &lt; /tmp/init_db.sql"
+        <exec command="${progs.mysql} -P${mysql_port} ${protocol_str} -h${mysql_host} -u${mysql_user} -p${mysql_pass} &lt; /tmp/init_db.sql"
               dir="${build.dir}" checkreturn="false" outputProperty="mysql_init.error.msg" returnProperty="mysql_init.error.code" />
 
         <if>
@@ -152,7 +152,7 @@
                 undooutputfile="${build.dir}/${build.dbdeploy.undofile}"/>
 
         <exec
-                command="export MYSQL_PWD=${mysql_pass}; ${progs.mysql} -P${mysql_port} ${protocol_str} -h${mysql_host} -u${mysql_user} ${db_name} &lt; ${build.dbdeploy.deployfile}"
+                command="${progs.mysql} -P${mysql_port} ${protocol_str} -h${mysql_host} -u${mysql_user} -p${mysql_pass} ${db_name} &lt; ${build.dbdeploy.deployfile}"
                 dir="${build.dir}"
                 returnProperty="dbdeploy_return" outputProperty="dbdeploy_output"/>
 
@@ -163,7 +163,7 @@
             <then>
                 <echo msg="DbDeployTask failed reason: ${dbdeploy_output}"/>
                 <exec
-                        command="export MYSQL_PWD=${mysql_pass}; ${progs.mysql} -P${mysql_port} ${protocol_str} -h${mysql_host} -u${mysql_user} ${db_name} &lt; ${build.dbdeploy.undofile}"
+                        command="${progs.mysql} -P${mysql_port} ${protocol_str} -h${mysql_host} -u${mysql_user} -p${mysql_pass} ${db_name} &lt; ${build.dbdeploy.undofile}"
                         dir="${build.dir}"
                         checkreturn="true"/>
                 <fail message="DbDeployTask failed."/>
@@ -261,14 +261,11 @@
             </then>
         </if>
 
-        <exec command="mkdir -p --mode=0777 ${project_path}/screenshots" level="info"/>
-        <exec command="mkdir -p --mode=0777 ${project_path}/misc/logos" level="info"/>
-        <exec command="mkdir -p --mode=0777 ${project_path}/misc/audio_covers" level="info"/>
+        <chmod file="${project_path}/screenshots" mode="0777" />
+        <chmod file="${project_path}/misc/logos" mode="0777" />
+        <chmod file="${project_path}/misc/audio_covers" mode="0777" />
 
         <exec command="mkdir ${project_path}/admin" level="info"/>
-        <exec command="mkdir ${project_path}/admin/logs" level="info"/>
-        <exec command="mkdir -p --mode=0777 ${project_path}/admin/resources/cache/twig" level="info"/>
-        <exec command="mkdir -p --mode=0777 ${project_path}/admin/resources/cache/sidebar" level="info"/>
         <exec command="mkdir ${project_path}/deploy/composer" level="info"/>
         <exec command="mkdir ${project_path}/../${apps_path}" level="info"/>
         <chmod file="${project_path}/../${apps_path}" mode="0777" />

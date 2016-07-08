@@ -18,6 +18,12 @@ class VideoClubController extends \Controller\BaseStalkerController {
         $this->logoDir = str_replace('/admin', '', $this->baseDir) . "/misc/logos";
         $this->app['error_local'] = array();
         $this->app['baseHost'] = $this->baseHost;
+        
+        $this->app['allStatus'] = array(
+            array('id' => 1, 'title' => $this->setLocalization('Unpublished')),
+            array('id' => 2, 'title' => $this->setLocalization('Published')),
+            array('id' => 3, 'title' => $this->setLocalization('Scheduled'))
+        );
     }
     
     // ------------------- action method ---------------------------------------
@@ -41,6 +47,8 @@ class VideoClubController extends \Controller\BaseStalkerController {
         
         $allYears = $this->db->getAllFromTable('video', 'year', 'year');
 
+        $list = $this->video_list_json();
+        
         $this->app['allYears'] = array_filter(array_map(function($val){
             if ((int)$val['year'] >= 1895) {
                 return array('id'=>$val['year'], 'title'=>$val['year']);
@@ -49,19 +57,17 @@ class VideoClubController extends \Controller\BaseStalkerController {
         }, $allYears));
         
         $this->app['allGenre'] =  $this->prepareNewGenresListIds($this->db->getVideoCategories());
-
-        $this->app['allStatus'] = array(
-            array('id' => 1, 'title' => $this->setLocalization('Unpublished')),
-            array('id' => 2, 'title' => $this->setLocalization('Published')),
-            array('id' => 3, 'title' => $this->setLocalization('Scheduled'))
-        );
-
+        $this->app['allVideo'] = $list['data'];
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
+        
         $this->app['allModerators'] = $this->db->getAllAdmins();
         
         $attribute = $this->getVideoListDropdownAttribute();
         $this->checkDropdownAttribute($attribute);
         $this->app['dropdownAttribute'] = $attribute;
-
+        
+        
         return $this->app['twig']->render($this->getTemplateName(__METHOD__));
     }
 
@@ -142,6 +148,11 @@ class VideoClubController extends \Controller\BaseStalkerController {
             return $no_auth;
         }
 
+        $allTasks = $this->video_schedule_list_json();
+        $this->app['allTasks'] = $allTasks['data'];
+        $this->app['recordsFiltered'] = $allTasks['recordsFiltered'];
+        $this->app['totalRecords'] = $allTasks['recordsTotal'];
+
         $attribute = $this->getVideoScheduleDropdownAttribute();
         $this->checkDropdownAttribute($attribute);
         $this->app['dropdownAttribute'] = $attribute;
@@ -153,6 +164,11 @@ class VideoClubController extends \Controller\BaseStalkerController {
         if ($no_auth = $this->checkAuth()) {
             return $no_auth;
         }
+
+        $allAds= $this->video_advertise_list_json();
+        $this->app['ads'] = $allAds['data'];
+        $this->app['recordsFiltered'] = $allAds['recordsFiltered'];
+        $this->app['totalRecords'] = $allAds['recordsTotal'];
 
         $attribute = $this->getVideoAdvertiseDropdownAttribute();
         $this->checkDropdownAttribute($attribute);
@@ -225,9 +241,16 @@ class VideoClubController extends \Controller\BaseStalkerController {
             return $no_auth;
         }
 
+        $allModerators= $this->video_moderators_addresses_list_json();
+        $this->app['ads'] = $allModerators['data'];
+        $this->app['Moderators'] = $allModerators['data'];
+        $this->app['recordsFiltered'] = $allModerators['recordsFiltered'];
+        $this->app['totalRecords'] = $allModerators['recordsTotal'];
+
         $attribute = $this->getVideoModeratorsAddressesDropdownAttribute();
         $this->checkDropdownAttribute($attribute);
         $this->app['dropdownAttribute'] = $attribute;
+
 
         return $this->app['twig']->render($this->getTemplateName(__METHOD__));
     }
@@ -284,6 +307,11 @@ class VideoClubController extends \Controller\BaseStalkerController {
             return $no_auth;
         }
 
+        $logs = $this->video_logs_json();
+        $this->app['totalRecords'] = $logs['recordsTotal'];
+        $this->app['recordsFiltered'] = $logs['recordsFiltered'];
+        $this->app['allVideoLogs'] = $logs['data'];
+
         $attribute = $this->getVideoLogsDropdownAttribute();
         $this->checkDropdownAttribute($attribute);
         $this->app['dropdownAttribute'] = $attribute;
@@ -295,6 +323,7 @@ class VideoClubController extends \Controller\BaseStalkerController {
             $this->app['breadcrumbs']->addItem($video['name']);
         }
 
+
         return $this->app['twig']->render($this->getTemplateName(__METHOD__));
     }
 
@@ -303,9 +332,12 @@ class VideoClubController extends \Controller\BaseStalkerController {
             return $no_auth;
         }
 
-        $attribute = $this->getVideoCategoriesDropdownAttribute();
-        $this->checkDropdownAttribute($attribute);
-        $this->app['dropdownAttribute'] = $attribute;
+        $this->app['dropdownAttribute'] = $this->getVideoCategoriesDropdownAttribute();
+        $list = $this->video_categories_list_json();
+
+        $this->app['allData'] = $list['data'];
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
 
         return $this->app['twig']->render($this->getTemplateName(__METHOD__));
     }
@@ -315,9 +347,12 @@ class VideoClubController extends \Controller\BaseStalkerController {
             return $no_auth;
         }
 
-        $attribute = $this->getVideoGenresDropdownAttribute();
-        $this->checkDropdownAttribute($attribute);
-        $this->app['dropdownAttribute'] = $attribute;
+        $this->app['dropdownAttribute'] = $this->getVideoGenresDropdownAttribute();
+        $list = $this->video_genres_list_json();
+
+        $this->app['allData'] = $list['data'];
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
 
         $allCategories = $this->db->getCategoriesGenres();
 
@@ -1031,49 +1066,23 @@ class VideoClubController extends \Controller\BaseStalkerController {
             }
         }
 
-        $error = $this->setLocalization("Error");
-        $param = (empty($param) ? (!empty($this->data)?$this->data: $this->postData) : $param);
+        $response = array(
+            'data' => array(),
+            'recordsTotal' => 0,
+            'recordsFiltered' => 0
+        );
 
-        $query_param = $this->prepareDataTableParams($param, array('operations', 'RowOrder', '_'));
-
-        if (!isset($query_param['where'])) {
-            $query_param['where'] = array();
-        }
-
-        $filds_for_select = $this->getVideoAdvertiseFields();
-
-        $query_param['select'] = array_values($filds_for_select);
-
-        if (!empty($query_param['like'])) {
-            if (array_key_exists('started', $query_param['like'])) {
-                unset($query_param['like']['started']);
-            }
-            if (array_key_exists('ended', $query_param['like'])) {
-                unset($query_param['like']['ended']);
-            }
-        }
-        $this->cleanQueryParams($query_param, array_keys($filds_for_select), $filds_for_select);
-
-        foreach($query_param['order'] as $key => $val){
-            if (array_key_exists($key, $filds_for_select )){
-                $new_key = preg_replace('/\s+as\s+`?' . $key . '`?', '', $filds_for_select[$key]);
-                unset($query_param['order'][$key]);
-                $query_param['order'][$new_key] = $val;
-            }
-        }
-
-        $response['recordsTotal'] = $this->db->getAdsTotalRows();
-        $response["recordsFiltered"] = $this->db->getAdsTotalRows($query_param['where'], $query_param['like']);
-
-        $must_watch = $this->setLocalization('all');
-        $response["data"] = array_map(function($row) use ($must_watch){
+        $ad = new \VclubAdvertising();
+        $self = $this;
+        $response["data"] = array_map(function($row) use ($self){
             if (!is_numeric($row['must_watch'])) {
-                $row['must_watch'] = $must_watch;
+                $row['must_watch'] = $self->setLocalization($row['must_watch']);
             }
             settype($row['status'], 'int');
             return $row;
-        }, $this->db->getAdsList($query_param));
+        }, $ad->getAllWithStatForMonth());
 
+        $response["recordsFiltered"] = $response["recordsTotal"] = (string) count($response["data"]);
         $response["draw"] = !empty($this->data['draw']) ? $this->data['draw'] : 1;
         $error = "";
 
@@ -1123,7 +1132,7 @@ class VideoClubController extends \Controller\BaseStalkerController {
         $error = $this->setLocalization('Failed');
         $ad = new \VclubAdvertising();
         
-        $result = $ad->delById($this->postData['adsid'])->total_rows();
+        $result = $ad->delById($this->postData['adsid']);
         if (is_numeric($result)) {
             $error = '';
             if ($result === 0) {
@@ -1386,7 +1395,6 @@ class VideoClubController extends \Controller\BaseStalkerController {
 
         $self = $this;
         $response['data'] = array_map(function($row) use ($self){
-            $row['censored'] = (int)$row['censored'];
             $row['localized_title'] = $self->setLocalization($row['category_name']);
             $row['RowOrder'] = "dTRow_" . $row['id'];
             return $row;
@@ -1449,12 +1457,7 @@ class VideoClubController extends \Controller\BaseStalkerController {
             )));
 
         if (empty($check)) {
-            $data['id']  = $this->db->insertCategoriesGenres(array(
-                'category_name' => $this->postData['category_name'],
-                'num' => $this->postData['num'],
-                'category_alias' => $category_alias,
-                'censored' => !empty($this->postData['censored'])
-            ));
+            $data['id']  = $this->db->insertCategoriesGenres(array('category_name' => $this->postData['category_name'], 'num' => $this->postData['num'], 'category_alias' => $category_alias));
             $data['category_name'] = $this->postData['category_name'];
             $error = '';
         }
@@ -1490,8 +1493,7 @@ class VideoClubController extends \Controller\BaseStalkerController {
         if (empty($check)) {
             $this->db->updateCategoriesGenres(array(
                 'category_name' => $this->postData['category_name'],
-                'num' => $this->postData['num'],
-                'censored' => !empty($this->postData['censored'])
+                'num' => $this->postData['num']
             ), array('id' => $this->postData['id']));
             $error = '';
             $data['id'] = $this->postData['id'];
@@ -1567,7 +1569,7 @@ class VideoClubController extends \Controller\BaseStalkerController {
         $error = $this->setLocalization('Error');
         $param = (!empty($this->data) ? $this->data : array());
 
-        $query_param = $this->prepareDataTableParams($param, array('operations', '_', 'localized_title', 'category_name', 'RowOrder'));
+        $query_param = $this->prepareDataTableParams($param, array('operations', '_', 'localized_title', 'category','RowOrder'));
 
         if (!isset($query_param['where'])) {
             $query_param['where'] = array();
@@ -1585,15 +1587,6 @@ class VideoClubController extends \Controller\BaseStalkerController {
 
         $query_param['select'] = array_values($filds_for_select);
 
-        $order = array();
-        if (!empty($query_param['order']['movie_in_genre'])) {
-            $order = $query_param['order'];
-        }
-
-        if (!empty($query_param['like']['movie_in_genre'])) {
-            unset($query_param['like']['movie_in_genre']);
-        }
-
         $this->cleanQueryParams($query_param, array_keys($filds_for_select), $filds_for_select);
 
         $response['recordsTotal'] = $this->db->getTotalRowsVideoCatGenresList();
@@ -1608,20 +1601,19 @@ class VideoClubController extends \Controller\BaseStalkerController {
         if (empty($query_param['select'])) {
             $query_param['select'][] = '*';
         }
+        $query_param['select'][] = 'cat_genre.id as id';
+        $query_param['select'][] = 'media_category.id as category_id';
 
-        if (!empty($order)) {
-            $query_param['order'] = $order;
+        if (!in_array('category_name', $query_param['select'])){
+            $query_param['select'][] = 'category_name';
         }
 
-        $cat_genre = $this->setLocalization($this->db->getAllFromTable('cat_genre', 'id'), 'title');
-        $cat_genre_localised = array_combine($this->getFieldFromArray($cat_genre, 'id'), $this->getFieldFromArray($cat_genre, 'title'));
+        $query_param['order']['title'] = 'ASC';
 
-        $media_category = $this->setLocalization($this->db->getAllFromTable('media_category', 'id'), 'category_name');
-        $media_category_localised = array_combine($this->getFieldFromArray($media_category, 'id'), $this->getFieldFromArray($media_category, 'category_name'));
-
-        $response['data'] = array_map(function($row) use ($cat_genre_localised, $media_category_localised){
-            $row['localized_title'] = $cat_genre_localised[$row['id']];
-            $row['category'] = $media_category_localised[$row['category_id']];
+        $self = $this;
+        $response['data'] = array_map(function($row) use ($self){
+            $row['localized_title'] = $self->setLocalization($row['title']);
+            $row['category'] = $self->setLocalization($row['category_name']);
             $row['RowOrder'] = "dTRow_" . $row['id'];
             return $row;
         }, $this->db->getVideoCatGenres($query_param));
@@ -2325,19 +2317,6 @@ class VideoClubController extends \Controller\BaseStalkerController {
         );
     }
 
-    private function getVideoAdvertiseFields(){
-        return array(
-            'id'         => 'V_A.`id` as `id`',
-            'title'         => 'V_A.`title` as `title`',
-            'url'           => 'V_A.`url` as `url`',
-            'weight'        => 'V_A.`weight` as `weight`',
-            'started'       => 'CAST(SUM(V_A_L.`watch_complete`) as UNSIGNED) as `started`',
-            'ended'         => 'CAST(COUNT(V_A_L.`vclub_ad_id`) as UNSIGNED) as `ended`',
-            'must_watch'    => 'V_A.`must_watch` as `must_watch`',
-            'status'        => 'V_A.`status` as `status`'
-        );
-    }
-
     private function prepareNewGenresListIds($all_genre_list = array()){
         $all_genre_list = $this->setLocalization($all_genre_list, 'title');
         $return_list = array();
@@ -2360,7 +2339,6 @@ class VideoClubController extends \Controller\BaseStalkerController {
             array('name'=>'localized_title',    'title'=>$this->setLocalization('Localized title'), 'checked' => TRUE),
             array('name'=>'genre_in_category',  'title'=>$this->setLocalization('Genres in category'), 'checked' => TRUE),
             array('name'=>'movie_in_category',  'title'=>$this->setLocalization('Movies in category'), 'checked' => TRUE),
-            array('name'=>'censored',           'title'=>$this->setLocalization('Age restriction'), 'checked' => TRUE),
             array('name'=>'operations',         'title'=>$this->setLocalization('Operation'),       'checked' => TRUE)
         );
     }
@@ -2436,8 +2414,7 @@ class VideoClubController extends \Controller\BaseStalkerController {
             'num' => '`media_category`.`num` as `num`',
             'category_name' => '`media_category`.`category_name` as `category_name`',
             'genre_in_category' => 'CAST((SELECT  COUNT(*) FROM `cat_genre` WHERE `cat_genre`.`category_alias` = `media_category`.`category_alias`) as CHAR) as `genre_in_category`',
-            'movie_in_category' => 'CAST((SELECT  COUNT(*) FROM `video` WHERE `video`.`category_id` = `media_category`.`id`) as CHAR) as `movie_in_category`',
-            'censored' => '`media_category`.`censored` as `censored`',
+            'movie_in_category' => 'CAST((SELECT  COUNT(*) FROM `video` WHERE `video`.`category_id` = `media_category`.`id`) as CHAR) as `movie_in_category`'
         );
     }
 
@@ -2445,11 +2422,7 @@ class VideoClubController extends \Controller\BaseStalkerController {
         return array(
             'title' => '`cat_genre`.`title` as `title`',
             'category' => '`media_category`.`category_name` as `category`',
-            'movie_in_genre' => '(SELECT  COUNT(*) FROM `video` WHERE `video`.`category_id` = `media_category`.`id` AND (`cat_genre`.`id` = `video`.`cat_genre_id_1` || `cat_genre`.`id` = `video`.`cat_genre_id_2` || `cat_genre`.`id` = `video`.`cat_genre_id_3` || `cat_genre`.`id` = `video`.`cat_genre_id_4`)) as `movie_in_genre`',
-            'id' => '`cat_genre`.`id` as `id`',
-            'category_id' => '`media_category`.`id` as `category_id`',
-            'category_name' =>  '`media_category`.`category_name` as `category_name`',
-            'category_alias' =>  '`media_category`.`category_alias` as `category_alias`'
+            'movie_in_genre' => 'CAST((SELECT  COUNT(*) FROM `video` WHERE `video`.`category_id` = `media_category`.`id` AND (`cat_genre`.`id` = `video`.`cat_genre_id_1` || `cat_genre`.`id` = `video`.`cat_genre_id_2` || `cat_genre`.`id` = `video`.`cat_genre_id_3` || `cat_genre`.`id` = `video`.`cat_genre_id_4`)) as CHAR) as `movie_in_genre`',
         );
     }
 }

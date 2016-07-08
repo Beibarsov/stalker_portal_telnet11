@@ -40,7 +40,6 @@ class BaseStalkerController {
         7 => 'all',
         8 => 'all',
     );
-    protected $sidebar_cache_time;
 
     public function __construct(Application $app, $modelName = '') {
         $this->app = $app;
@@ -60,10 +59,11 @@ class BaseStalkerController {
         $this->setRequestMethod();
         $this->setAjaxFlag();
         $this->getData();
+        $this->setDataTablePluginSettings();
 
         $modelName = "Model\\" . (empty($modelName) ? 'BaseStalker' : str_replace(array("\\", "Controller"), '', $modelName)) . 'Model';
         $this->db = FALSE;
-        $modelName = (class_exists($modelName) ? $modelName : 'Model\BaseStalkerModel');
+        $modelName = (class_exists($modelName)? $modelName: 'Model\BaseStalkerModel');
         if (class_exists($modelName)) {
             $this->db = new $modelName;
             if (!($this->db instanceof $modelName)) {
@@ -71,6 +71,9 @@ class BaseStalkerController {
             }
         }
         $uid = $this->admin->getId();
+        if ($this->db !== FALSE && !empty($uid)) {
+            $this->app['userTaskMsgs'] = $this->db->getCountUnreadedMsgsByUid($uid);
+        }
 
         $this->app['user_id'] = $uid;
 
@@ -79,41 +82,30 @@ class BaseStalkerController {
         $this->db->setAdmin($this->app['user_id'], $this->app['userlogin']);
 
         $this->saveFiles = $app['saveFiles'];
+        $this->setSideBarMenu();
+        $this->setTopBarMenu();
 
-        if ($this->app['userlogin'] == 'admin') {
-            $this->setControllerAccessMap();
+        $update = $this->db->getAllFromTable('updates', 'id');
+        if ( !empty($update) ){
+            $this->app['new_version'] = end($update);
+        } else {
+            $this->app['new_version'] = FALSE;
+        }
+        if (is_file($this->baseDir . '/../c/version.js')) {
+            $tmp = file_get_contents($this->baseDir . '/../c/version.js');
+            if (preg_match('/[\d\.]+/i', $tmp, $ver) && !empty($ver)){
+                $this->app['current_version'] = $ver[0];
+            } else {
+                $this->app['current_version'] = FALSE;
+            }
+        }
+
+        if($this->app['userlogin'] == 'admin'){
             $this->access_level = 8;
         } else {
             $this->setAccessLevel();
         }
-
-        $this->sidebar_cache_time = Config::getSafe('admin_panel_sidebar_cache_time', 0);
-        if (!$this->isAjax) {
-            $this->setDataTablePluginSettings();
-            if ($this->db !== FALSE && !empty($uid)) {
-                $this->app['userTaskMsgs'] = $this->db->getCountUnreadedMsgsByUid($uid);
-            }
-            $update = $this->db->getAllFromTable('updates', 'id');
-            if (!empty($update)) {
-                $this->app['new_version'] = end($update);
-            } else {
-                $this->app['new_version'] = FALSE;
-            }
-            if (is_file($this->baseDir . '/../c/version.js')) {
-                $tmp = file_get_contents($this->baseDir . '/../c/version.js');
-                if (preg_match('/[\d\.]+/i', $tmp, $ver) && !empty($ver)) {
-                    $this->app['current_version'] = $ver[0];
-                } else {
-                    $this->app['current_version'] = FALSE;
-                }
-            }
-            $this->setSideBarMenu();
-            $this->setTopBarMenu();
-            $this->setBreadcrumbs();
-            $this->app['request']->getSession()->set('cached_lang', $this->app['language']);
-        }
-
-        if (isset($this->data['set-dropdown-attribute'])) {
+        if (isset($this->data['set-dropdown-attribute'])) {            
             $this->set_dropdown_attribute();
             exit;
         }
@@ -129,8 +121,9 @@ class BaseStalkerController {
         $this->app['action_alias'] = (count($tmp) == 2) ? $tmp[1] : '';
         $this->baseHost = $this->request->getSchemeAndHttpHost();
         $this->workHost = $this->baseHost . Config::getSafe('portal_url', '/stalker_portal/');
-        $this->app['relativePath'] = $this->relativePath = Config::getSafe('portal_url', '/stalker_portal/');
+        $this->relativePath = Config::getSafe('portal_url', '/stalker_portal/');
         $this->app['workHost'] = $this->workHost;
+        $this->app['relativePath'] = Config::getSafe('portal_url', '/stalker_portal/');
         $this->Uri = $this->app['request']->getUri();
         $controller = (!empty($this->app['controller_alias']) ? "/" . $this->app['controller_alias'] : '');
         $action = (!empty($this->app['action_alias']) ? "/" . $this->app['action_alias'] : '');
@@ -141,32 +134,26 @@ class BaseStalkerController {
     }
 
     private function setSideBarMenu() {
-        if (!$this->checkCachedMenu('side_bar') || empty($this->app['side_bar'])) {
-            $side_bar = json_decode(str_replace(array("_(", ")"), '', file_get_contents($this->baseDir . '/json_menu/menu.json')), TRUE);
-            $this->setControllerAccessMap();
-            $this->cleanSideBar($side_bar);
-            $this->app['side_bar'] = $side_bar;
-            $this->setCachedMenu('side_bar');
-        }
+        $side_bar  = json_decode(str_replace(array("_(", ")"), '', file_get_contents($this->baseDir . '/json_menu/menu.json')), TRUE);     
+        $this->setControllerAccessMap();
+        $this->cleanSideBar($side_bar);
+        $this->app['side_bar'] = $side_bar;
     }
 
     private function setTopBarMenu() {
-        if ($this->checkCachedMenu('top_bar') === FALSE || empty($this->app['top_bar'])) {
-            $top_bar = json_decode(str_replace(array("_(", ")"), '', file_get_contents($this->baseDir . '/json_menu/top_menu.json')), TRUE);
-            if (!empty($this->app['userlogin'])) {
-                $top_bar[1]['add_params'] = '<span class="hidden-xs">"' . $this->app['userlogin'] . '"</span>';
-                if (!empty($this->app['userTaskMsgs'])) {
-                    $top_bar[1]['action'][1]['add_params'] = '<span class="hidden-xs badge">' . $this->app['userTaskMsgs'] . '</span>';
-                }
+        $top_bar  = json_decode(str_replace(array("_(", ")"), '', file_get_contents($this->baseDir . '/json_menu/top_menu.json')), TRUE);
+        if (!empty($this->app['userlogin'])) {
+            $top_bar[1]['add_params'] = '<span class="hidden-xs">"'. $this->app['userlogin'] .'"</span>';
+            if (!empty($this->app['userTaskMsgs'])) {
+                $top_bar[1]['action'][1]['add_params'] = '<span class="hidden-xs badge">'. $this->app['userTaskMsgs'] .'</span>';
             }
-
-            $this->setControllerAccessMap();
-            $this->cleanSideBar($top_bar);
-            $this->app['top_bar'] = $top_bar;
-            $this->setCachedMenu('top_bar');
         }
+        
+        $this->setControllerAccessMap();
+        $this->cleanSideBar($top_bar);
+        $this->app['top_bar'] = $top_bar;
     }
-
+	
     private function setRequestMethod() {
         $this->method = $this->request->getMethod();
     }
@@ -185,11 +172,11 @@ class BaseStalkerController {
             if (!is_array($source)) {
                 $translate = '';
                 if ($number === FALSE) {
-                    $translate = $this->app['translator']->trans($source, $params);
+                    $translate =  $this->app['translator']->trans($source, $params);
                 } else {
-                    $translate = $this->app['translator']->transChoice($source, $number, $params);
+                    $translate =  $this->app['translator']->transChoice($source, $number, $params);
                 }
-                return (!empty($translate) ? $translate : $source);
+                return (!empty($translate) ? $translate: $source);
             } elseif (array_key_exists($fieldname, $source) && is_string($source[$fieldname])) {
                 $source[$fieldname] = $this->setLocalization($source[$fieldname], $fieldname, $number, $params);
             } else {
@@ -233,7 +220,7 @@ class BaseStalkerController {
         if (empty($this->app['controller_alias']) || ($this->app['action_alias'] != 'register' && $this->app['action_alias'] != 'login')) {
             if (!$this->admin->isAuthorized()) {
                 if ($this->isAjax) {
-                    $response = $this->generateAjaxResponse(array(), $this->setLocalization('Need authorization'));
+                    $response = $this->generateAjaxResponse(array(), 'Need authorization');
                     return new Response(json_encode($response), 401);
                 } else {
                     return $this->app->redirect(trim($this->workURL, '/') . '/login', 302);
@@ -241,7 +228,7 @@ class BaseStalkerController {
             }
 
             $parent_access = $this->getParentActionAccess();
-
+            
             if(
                 $this->access_level < 1 ||
                 (!empty($this->postData) && !$this->isAjax && $this->access_level < 2) ||
@@ -254,7 +241,7 @@ class BaseStalkerController {
                 } else {
                     return $this->app['twig']->render("AccessDenied.twig");
                 }
-            }
+            } 
         }
     }
 
@@ -315,9 +302,9 @@ class BaseStalkerController {
         if (array_key_exists('start', $params)) {
             $query_param['limit']['offset'] = $params['start'];
         }
-        if (!empty($params['order'])) {
+        if (!empty($params['order'])){
             foreach ($params['order'] as $val) {
-                $column = $params['columns'][(int)$val['column']];
+                $column = $params['columns'][(int) $val['column']];
 
                 $direct = $val['dir'];
                 $col_name = !empty($column['name']) ? $column['name'] : (!empty($column['data']) ? $column['data'] : FALSE);
@@ -338,11 +325,8 @@ class BaseStalkerController {
                     continue;
                 }
                 $query_param['select'][] = $col_name;
-                if (!array_key_exists('visible', $column) || $column['visible'] != 'false') {
-                    settype($params['search']['value'], 'string');
-                    if (!empty($column['searchable']) && $column['searchable'] == 'true' && (!empty($params['search']['value']) || $params['search']['value'] === '0') && $params['search']['value'] != "false") {
-                        $query_param['like'][$col_name] = "%" . addslashes($params['search']['value']) . "%";
-                    }
+                if (!empty($column['searchable']) && $column['searchable'] == 'true' && !empty($params['search']['value']) && $params['search']['value'] != "false") {
+                    $query_param['like'][$col_name] = "%" . $params['search']['value'] . "%";
                 }
             }
         }
@@ -350,12 +334,9 @@ class BaseStalkerController {
         return $query_param;
     }
 
-    protected function cleanQueryParams(&$data, $filds_for_delete = array(), $fields_for_replace = array(), $order_no_replace = FALSE) {
+    protected function cleanQueryParams(&$data, $filds_for_delete = array(), $fields_for_replace = array()) {
         reset($data);
         while (list($key, $block) = each($data)) {
-            if ($order_no_replace !== FALSE && $key == 'order') {
-                continue;
-            }
             foreach ($filds_for_delete as $field) {
                 if (array_key_exists($field, $block)) {
                     $new_name = str_replace(" as `$field`", '', $fields_for_replace[$field]);
@@ -400,103 +381,88 @@ class BaseStalkerController {
 
     private function setAccessLevel() {
         $this->setControllerAccessMap();
-        $controller_alias = !empty($this->app['controller_alias']) ? $this->app['controller_alias'] : 'index';
+        $controller_alias = !empty($this->app['controller_alias']) ? $this->app['controller_alias']: 'index';
         if (array_key_exists($controller_alias, $this->app['controllerAccessMap']) && $this->app['controllerAccessMap'][$controller_alias]['access']) {
             if ($this->app['action_alias'] == '' || $this->app['action_alias'] == 'index') {
                 $this->access_level = $this->app['controllerAccessMap'][$controller_alias]['access'];
                 return;
             } elseif (array_key_exists($this->app['action_alias'], $this->app['controllerAccessMap'][$controller_alias]['action'])) {
                 $parent_access = $this->getParentActionAccess();
-                $this->access_level = ($parent_access !== FALSE) ? $parent_access : $this->app['controllerAccessMap'][$controller_alias]['action'][$this->app['action_alias']]['access'];
+                $this->access_level = ($parent_access !== FALSE) ? $parent_access: $this->app['controllerAccessMap'][$controller_alias]['action'][$this->app['action_alias']]['access'];
                 return;
             }
         }
         $this->access_level = 0;
     }
-
-    private function setControllerAccessMap() {
+    
+    private function setControllerAccessMap(){
         if (empty($this->app['controllerAccessMap'])) {
             $is_admin = (!empty($this->app['userlogin']) && $this->app['userlogin'] == 'admin');
-            $gid = ($is_admin) ? '' : $this->admin->getGID();
+            $gid = ($is_admin)?'':$this->admin->getGID(); 
             $map = array();
             $tmp_map = $this->db->getControllerAccess($gid, $this->app['reseller']);
             foreach ($tmp_map as $row) {
-                if (!array_key_exists($row['controller_name'], $map)) {
-                    $map[$row['controller_name']]['access'] = (!$is_admin) ? $this->getDecFromBin($row) : '8';
+                if(!array_key_exists($row['controller_name'], $map)) {
+                    $map[$row['controller_name']]['access'] = (!$is_admin) ? $this->getDecFromBin($row): '8';
                     if ($map[$row['controller_name']]['access'] == 0) {
                         continue;
                     }
                     $map[$row['controller_name']]['action'] = array();
                 }
                 if ((!empty($row['action_name']) && $row['action_name'] != 'index') || $row['controller_name'] != 'index') {
-                    $map[$row['controller_name']]['action'][$row['action_name']]['access'] = (!$is_admin) ? $this->getDecFromBin($row) : '8';
+                    $map[$row['controller_name']]['action'][$row['action_name']]['access'] = (!$is_admin) ? $this->getDecFromBin($row): '8';
                 }
             }
             $this->app['controllerAccessMap'] = $map;
         }
     }
-
-    private function getDecFromBin($row) {
-        return bindec($row['action_access'] . $row['edit_access'] . $row['view_access']);
+    
+    private function getDecFromBin($row){
+        $key = $row['action_access'].$row['edit_access'].$row['view_access'];
+        return bindec($row['action_access'].$row['edit_access'].$row['view_access']);
     }
-
+    
     private function cleanSideBar(&$side_bar) {
-        $this->setControllerAccessMap();
+        if (empty($this->app['controllerAccessMap'])) {
+            $this->setControllerAccessMap();
+        }
         $dont_remove = (!empty($this->app['userlogin']) && $this->app['userlogin'] == 'admin');
-        while (list($key, $row) = each($side_bar)) {
+        while(list($key, $row) = each($side_bar)){
             $controller = str_replace('_', '-', $row['alias']);
-            $side_bar[$key]['name'] = $this->setLocalization($row['name']);
-
-            if ((!$dont_remove && !array_key_exists($controller, $this->app['controllerAccessMap'])) ||
-                (array_key_exists($controller, $this->app['controllerAccessMap']) && $this->app['controllerAccessMap'][$controller]['access'] == 0)) {
+            $side_bar[$key]['name'] = $row['name'] = $this->setLocalization($row['name']);
+            if ($this->app['controller_alias'] == $controller) {
+                    $this->app['breadcrumbs']->addItem($row['name'], $this->workURL . "/$controller");
+                }
+            if ((!$dont_remove && !array_key_exists($controller, $this->app['controllerAccessMap']))
+                || (array_key_exists($controller, $this->app['controllerAccessMap']) && $this->app['controllerAccessMap'][$controller]['access'] == 0)) {
                 unset($side_bar[$key]);
                 continue;
             }
-            while (list($key_a, $row_a) = each($row['action'])) {
-                $side_bar[$key]['action'][$key_a]['name'] = $this->setLocalization($row_a['name']);
+            while(list($key_a, $row_a) = each($row['action'])){
+                $side_bar[$key]['action'][$key_a]['name'] = $row_a['name'] = $this->setLocalization($row_a['name']);
                 $action = str_replace('_', '-', $row_a['alias']);
-                if ((!$dont_remove && !array_key_exists($action, $this->app['controllerAccessMap'][$controller]['action'])) ||
-                    (array_key_exists($action, $this->app['controllerAccessMap'][$controller]['action']) && $this->app['controllerAccessMap'][$controller]['action'][$action]['access'] == 0)) {
+                if ($this->app['controller_alias'] == $controller && $this->app['action_alias'] == $action) {
+                    $this->app['breadcrumbs']->addItem($row_a['name'], $this->workURL . "/$controller/$action");
+                }
+                if ((!$dont_remove && !array_key_exists($action, $this->app['controllerAccessMap'][$controller]['action']))
+                    || (array_key_exists($action, $this->app['controllerAccessMap'][$controller]['action']) && $this->app['controllerAccessMap'][$controller]['action'][$action]['access'] == 0)) {
                     unset($side_bar[$key]['action'][$key_a]);
                 }
             }
         }
-
     }
-
-    protected function setBreadcrumbs(){
-        if (empty($this->app['side_bar'])) {
-            $this->setSideBarMenu();
-        }
-        $side_bar = $this->app['side_bar'];
-        while (list($key, $row) = each($side_bar)) {
-            $controller = str_replace('_', '-', $row['alias']);
-            if ($this->app['controller_alias'] == $controller) {
-                $this->app['breadcrumbs']->addItem($row['name'], $this->workURL . "/$controller");
-
-                while (list($key_a, $row_a) = each($row['action'])) {
-                    $action = str_replace('_', '-', $row_a['alias']);
-                    if ($this->app['controller_alias'] == $controller && $this->app['action_alias'] == $action) {
-                        $this->app['breadcrumbs']->addItem($row_a['name'], $this->workURL . "/$controller/$action");
-                        break;
-                    }
-                }
-                break;
-            }
-        }
-    }
-
+    
     protected function infliction_array($dest = array(), $source = array()) {
         if (is_array($dest)) {
-            while (list($d_key, $d_row) = each($dest)) {
+            while(list($d_key, $d_row) = each($dest)){
                 if (is_array($source)) {
                     if (array_key_exists($d_key, $source)) {
                         $dest[$d_key] = $this->infliction_array($d_row, $source[$d_key]);
                     } else {
                         continue;
                     }
-                } else {
-                    return $dest;
+                } else{
+                    return $dest; 
                 }
             }
         } elseif (!is_array($source)) {
@@ -504,14 +470,14 @@ class BaseStalkerController {
         }
         return $dest;
     }
-
-    protected function checkDropdownAttribute(&$attribute, $filters = '') {
-
+    
+    protected function checkDropdownAttribute(&$attribute, $filters = ''){
+        
         $param = array();
         $param['controller_name'] = $this->app['controller_alias'];
-        $param['action_name'] = (empty($this->app['action_alias']) ? 'index' : $this->app['action_alias']) . $filters;
+        $param['action_name'] = (empty($this->app['action_alias']) ? 'index': $this->app['action_alias']).$filters;
         $param['admin_id'] = $this->admin->getId();
-
+        
         $base_attribute = $this->db->getDropdownAttribute($param);
         if (empty($base_attribute)) {
             return $attribute;
@@ -519,7 +485,7 @@ class BaseStalkerController {
         $dropdown_attributes = unserialize($base_attribute['dropdown_attributes']);
         foreach ($dropdown_attributes as $key => $value) {
             reset($attribute);
-            while (list($num, $row) = each($attribute)) {
+            while (list($num, $row) = each($attribute)){
                 if ($row['name'] == $key) {
                     $attribute[$num]['checked'] = ($value == 'true');
                     break;
@@ -528,11 +494,11 @@ class BaseStalkerController {
         }
     }
 
-    protected function setDataTablePluginSettings() {
+    protected function setDataTablePluginSettings(){
         $this->app['datatable_lang_file'] = "./plugins/datatables/lang/" . str_replace('utf8', 'json', $this->app['locale']);
     }
 
-    protected function getParentActionAccess() {
+    protected function getParentActionAccess(){
         $return = FALSE;
         if ($this->app['userlogin'] !== 'admin' && $this->isAjax && preg_match("/-json$/", $this->app['action_alias'])) {
             $action_alias = preg_replace(array('/-composition/i', '/-datatable\d/i'), '', $this->app['action_alias'], 1);
@@ -541,24 +507,24 @@ class BaseStalkerController {
             $parent_access = 0;
             if ($parent_1 == $this->app['controller_alias'] || $parent_2 == $this->app['controller_alias']) {
                 $parent_access = $this->app['controllerAccessMap'][$this->app['controller_alias']]['access'];
-            } elseif (array_key_exists($parent_1, $this->app['controllerAccessMap'][$this->app['controller_alias']]['action'])) {
+            } elseif (array_key_exists($parent_1, $this->app['controllerAccessMap'][$this->app['controller_alias']]['action'])){
                 $parent_access = $this->app['controllerAccessMap'][$this->app['controller_alias']]['action'][$parent_1]['access'];
             } elseif (array_key_exists($parent_2, $this->app['controllerAccessMap'][$this->app['controller_alias']]['action'])) {
                 $parent_access = $this->app['controllerAccessMap'][$this->app['controller_alias']]['action'][$parent_2]['access'];
             }
-            $return = (int)($parent_access > 0);
+            $return = (int) ($parent_access > 0);
         }
         return $return;
     }
 
     protected function mb_ucfirst($str) {
         $fc = mb_strtoupper(mb_substr($str, 0, 1, 'UTF-8'), 'UTF-8');
-        return $fc . mb_substr($str, 1, mb_strlen($str), 'UTF-8');
+        return $fc.mb_substr($str, 1, mb_strlen($str), 'UTF-8');
     }
 
-    protected function getUCArray($array = array(), $field = '') {
+    protected function getUCArray($array = array(), $field = ''){
         reset($array);
-        while (list($key, $row) = each($array)) {
+        while(list($key, $row) = each($array)){
             if (!empty($field)) {
                 $row[$field] = $this->mb_ucfirst($row[$field]);
             } else {
@@ -567,224 +533,5 @@ class BaseStalkerController {
             $array[$key] = $row;
         }
         return $array;
-    }
-
-    protected function getLanguageCodesEN($code = FALSE) {
-        $return_array =  array(
-            'aa' => $this->setLocalization('Afar'),
-            'ab' => $this->setLocalization('Abkhazian'),
-            'af' => $this->setLocalization('Afrikaans'),
-            'ak' => $this->setLocalization('Akan'),
-            'am' => $this->setLocalization('Amharic'),
-            'ar' => $this->setLocalization('Arabic'),
-            'as' => $this->setLocalization('Assamese'),
-            'av' => $this->setLocalization('Avaric'),
-            'ae' => $this->setLocalization('Avestan'),
-            'ay' => $this->setLocalization('Aymara'),
-            'az' => $this->setLocalization('Azerbaijani'),
-            'ba' => $this->setLocalization('Bashkir'),
-            'bm' => $this->setLocalization('Bambara'),
-            'eu' => $this->setLocalization('Basque'),
-            'be' => $this->setLocalization('Belarusian'),
-            'bn' => $this->setLocalization('Bengali'),
-            'bi' => $this->setLocalization('Bislama'),
-            'bo' => $this->setLocalization('Tibetan'),
-            'bs' => $this->setLocalization('Bosnian'),
-            'br' => $this->setLocalization('Breton'),
-            'bg' => $this->setLocalization('Bulgarian'),
-            'ca' => $this->setLocalization('Catalan'),
-            'cs' => $this->setLocalization('Czech'),
-            'ch' => $this->setLocalization('Chamorro'),
-            'ce' => $this->setLocalization('Chechen'),
-            'cu' => $this->setLocalization('Church Slavic'),
-            'cv' => $this->setLocalization('Chuvash'),
-            'kw' => $this->setLocalization('Cornish'),
-            'co' => $this->setLocalization('Corsican'),
-            'cy' => $this->setLocalization('Welsh'),
-            'da' => $this->setLocalization('Danish'),
-            'de' => $this->setLocalization('German'),
-            'dv' => $this->setLocalization('Divehi'),
-            'dz' => $this->setLocalization('Dzongkha'),
-            'el' => $this->setLocalization('Greek'),
-            'en' => $this->setLocalization('English'),
-            'eo' => $this->setLocalization('Esperanto'),
-            'et' => $this->setLocalization('Estonian'),
-            'ee' => $this->setLocalization('Ewe'),
-            'fo' => $this->setLocalization('Faroese'),
-            'fa' => $this->setLocalization('Persian'),
-            'fj' => $this->setLocalization('Fijian'),
-            'fi' => $this->setLocalization('Finnish'),
-            'fr' => $this->setLocalization('French'),
-            'fy' => $this->setLocalization('Western Frisian'),
-            'ff' => $this->setLocalization('Fulah'),
-            'ka' => $this->setLocalization('Georgian'),
-            'gd' => $this->setLocalization('Gaelic'),
-            'ga' => $this->setLocalization('Irish'),
-            'gl' => $this->setLocalization('Galician'),
-            'gv' => $this->setLocalization('Manx'),
-            'gn' => $this->setLocalization('Guarani'),
-            'gu' => $this->setLocalization('Gujarati'),
-            'ha' => $this->setLocalization('Hausa'),
-            'he' => $this->setLocalization('Hebrew'),
-            'hz' => $this->setLocalization('Herero'),
-            'hi' => $this->setLocalization('Hindi'),
-            'ho' => $this->setLocalization('Hiri Motu'),
-            'hr' => $this->setLocalization('Croatian'),
-            'hu' => $this->setLocalization('Hungarian'),
-            'hy' => $this->setLocalization('Armenian'),
-            'ig' => $this->setLocalization('Igbo'),
-            'iu' => $this->setLocalization('Inuktitut'),
-            'ie' => $this->setLocalization('Interlingue'),
-            'ia' => $this->setLocalization('Interlingua'),
-            'id' => $this->setLocalization('Indonesian'),
-            'ik' => $this->setLocalization('Inupiaq'),
-            'is' => $this->setLocalization('Icelandic'),
-            'it' => $this->setLocalization('Italian'),
-            'jv' => $this->setLocalization('Javanese'),
-            'ja' => $this->setLocalization('Japanese'),
-            'kl' => $this->setLocalization('Kalaallisut'),
-            'kn' => $this->setLocalization('Kannada'),
-            'ks' => $this->setLocalization('Kashmiri'),
-            'kr' => $this->setLocalization('Kanuri'),
-            'kk' => $this->setLocalization('Kazakh'),
-            'km' => $this->setLocalization('Central Khmer'),
-            'ki' => $this->setLocalization('Kikuyu'),
-            'rw' => $this->setLocalization('Kinyarwanda'),
-            'ky' => $this->setLocalization('Kirghiz'),
-            'kv' => $this->setLocalization('Komi'),
-            'kg' => $this->setLocalization('Kongo'),
-            'ko' => $this->setLocalization('Korean'),
-            'kj' => $this->setLocalization('Kuanyama'),
-            'ku' => $this->setLocalization('Kurdish'),
-            'lo' => $this->setLocalization('Lao'),
-            'la' => $this->setLocalization('Latin'),
-            'lv' => $this->setLocalization('Latvian'),
-            'ln' => $this->setLocalization('Lingala'),
-            'lt' => $this->setLocalization('Lithuanian'),
-            'lb' => $this->setLocalization('Luxembourgish'),
-            'lu' => $this->setLocalization('Luba-Katanga'),
-            'lg' => $this->setLocalization('Ganda'),
-            'mk' => $this->setLocalization('Macedonian'),
-            'mh' => $this->setLocalization('Marshallese'),
-            'ml' => $this->setLocalization('Malayalam'),
-            'mi' => $this->setLocalization('Maori'),
-            'mr' => $this->setLocalization('Marathi'),
-            'mg' => $this->setLocalization('Malagasy'),
-            'mt' => $this->setLocalization('Maltese'),
-            'mn' => $this->setLocalization('Mongolian'),
-            'ms' => $this->setLocalization('Malay'),
-            'my' => $this->setLocalization('Burmese'),
-            'na' => $this->setLocalization('Nauru'),
-            'nv' => $this->setLocalization('Navajo'),
-            'nr' => $this->setLocalization('Ndebele'),
-            'nd' => $this->setLocalization('North Ndebele'),
-            'ng' => $this->setLocalization('Ndonga'),
-            'ne' => $this->setLocalization('Nepali'),
-            'nl' => $this->setLocalization('Dutch'),
-            'no' => $this->setLocalization('Norwegian'),
-            'ny' => $this->setLocalization('Chichewa'),
-            'oc' => $this->setLocalization('Occitan'),
-            'oj' => $this->setLocalization('Ojibwa'),
-            'or' => $this->setLocalization('Oriya'),
-            'om' => $this->setLocalization('Oromo'),
-            'os' => $this->setLocalization('Ossetian'),
-            'pa' => $this->setLocalization('Panjabi'),
-            'pi' => $this->setLocalization('Pali'),
-            'pl' => $this->setLocalization('Polish'),
-            'pt' => $this->setLocalization('Portuguese'),
-            'ps' => $this->setLocalization('Pushto'),
-            'qu' => $this->setLocalization('Quechua'),
-            'rm' => $this->setLocalization('Romansh'),
-            'ro' => $this->setLocalization('Romanian'),
-            'rn' => $this->setLocalization('Rundi'),
-            'ru' => $this->setLocalization('Russian'),
-            'sg' => $this->setLocalization('Sango'),
-            'sa' => $this->setLocalization('Sanskrit'),
-            'si' => $this->setLocalization('Sinhala'),
-            'sk' => $this->setLocalization('Slovak'),
-            'sl' => $this->setLocalization('Slovenian'),
-            'sm' => $this->setLocalization('Samoan'),
-            'sn' => $this->setLocalization('Shona'),
-            'sd' => $this->setLocalization('Sindhi'),
-            'so' => $this->setLocalization('Somali'),
-            'st' => $this->setLocalization('Southern Sotho'),
-            'es' => $this->setLocalization('Spanish'),
-            'sq' => $this->setLocalization('Albanian'),
-            'sc' => $this->setLocalization('Sardinian'),
-            'sr' => $this->setLocalization('Serbian'),
-            'ss' => $this->setLocalization('Swati'),
-            'su' => $this->setLocalization('Sundanese'),
-            'sw' => $this->setLocalization('Swahili'),
-            'sv' => $this->setLocalization('Swedish'),
-            'ty' => $this->setLocalization('Tahitian'),
-            'ta' => $this->setLocalization('Tamil'),
-            'tt' => $this->setLocalization('Tatar'),
-            'te' => $this->setLocalization('Telugu'),
-            'tg' => $this->setLocalization('Tajik'),
-            'tl' => $this->setLocalization('Tagalog'),
-            'th' => $this->setLocalization('Thai'),
-            'ti' => $this->setLocalization('Tigrinya'),
-            'to' => $this->setLocalization('Tonga'),
-            'tn' => $this->setLocalization('Tswana'),
-            'ts' => $this->setLocalization('Tsonga'),
-            'tk' => $this->setLocalization('Turkmen'),
-            'tr' => $this->setLocalization('Turkish'),
-            'tw' => $this->setLocalization('Twi'),
-            'ug' => $this->setLocalization('Uighur'),
-            'uk' => $this->setLocalization('Ukrainian'),
-            'ur' => $this->setLocalization('Urdu'),
-            'uz' => $this->setLocalization('Uzbek'),
-            've' => $this->setLocalization('Venda'),
-            'vi' => $this->setLocalization('Vietnamese'),
-            'vo' => $this->setLocalization('Volap'),
-            'wo' => $this->setLocalization('Wolof'),
-            'xh' => $this->setLocalization('Xhosa'),
-            'yi' => $this->setLocalization('Yiddish'),
-            'yo' => $this->setLocalization('Yoruba'),
-            'za' => $this->setLocalization('Zhuang'),
-            'zh' => $this->setLocalization('Chinese'),
-            'zu' => $this->setLocalization('Zulu')
-        );
-        return ($code !== FALSE) ? (array_key_exists($code, $return_array) ? $return_array[$code]: '') : $return_array;
-    }
-
-    private function checkCachedMenu($menu_name) {
-        $cached_lang = $this->app['request']->getSession()->get('cached_lang', '');
-        return !$this->isCacheTimeOut($menu_name) && $cached_lang == $this->app['language'] ? $this->getCachedMenu($menu_name) : FALSE;
-    }
-
-    private function setCachedMenu($menu_name) {
-        if (is_string($menu_name) && !empty($menu_name)) {
-            $is_cached_field = $menu_name . '_last_cached';
-            $dir = $this->baseDir . '/resources/cache/sidebar';
-            $cached_file_name = $this->app->offsetExists($is_cached_field) ? $dir . '/' . $this->app[$is_cached_field] . '_' . $this->app['user_id'] . '.' . $menu_name: '';
-            if (is_dir($dir)) {
-                if (!empty($cached_file_name) && is_file($cached_file_name)) {
-                    @unlink($cached_file_name);
-                }
-                $this->app[$is_cached_field] = time();
-                $this->app['request']->getSession()->set($is_cached_field, $this->app[$is_cached_field]);
-                file_put_contents($dir . '/' . $this->app[$is_cached_field] . '_' . $this->app['user_id'] . '.' . $menu_name, serialize($this->app[$menu_name]));
-            }
-        }
-    }
-
-    private function isCacheTimeOut($field_name) {
-        $is_cached_field = $field_name . '_last_cached';
-        $this->app[$is_cached_field] = $this->app['request']->getSession()->get($is_cached_field, 0);
-        return empty($this->app[$is_cached_field]) || (time() - ((int)$this->app[$is_cached_field] + $this->sidebar_cache_time)) > 0;
-    }
-
-    private function getCachedMenu($menu_name) {
-        if (is_string($menu_name) && !empty($menu_name)) {
-            $is_cached_field = $menu_name . '_last_cached';
-            $dir = $this->baseDir . '/resources/cache/sidebar';
-            $cached_file_name = $dir . '/' . $this->app[$is_cached_field] . '_' . $this->app['user_id'] . '.' . $menu_name;
-            if (is_dir($dir) && is_file($cached_file_name)) {
-                $this->app[$menu_name] = unserialize(file_get_contents($cached_file_name));
-                return !empty($this->app[$menu_name]);
-            }
-        }
-        return FALSE;
     }
 }

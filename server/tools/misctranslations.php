@@ -632,20 +632,19 @@ _('Publish or add to schedule');
 _('Unpublish video');
 
 /* Launcher profile */
-_('TV');
-_('VIDEO CLUB');
-_('AUDIO CLUB');
-_('RADIO');
-_('KARAOKE');
-_('EXPLORER');
-_('BROWSER');
-_('DOWNLOADS');
-_('RECORDS');
-_('WEATHER');
-_('SETTINGS');
-_('SYSTEM');
-_('PORTAL');
-_('EXCHANGE');
+_('tv');
+_('video club');
+_('audio club');
+_('radio');
+_('karaoke');
+_('explorer');
+_('browser');
+_('downloads');
+_('records');
+_('weather');
+_('settings');
+_('portal');
+_('exchange');
 _('Watch TV shows, movies, tv series, news and educational programs in digital quality.');
 _('Library of movies for any mood with easy search and sorting by genre that help to find what you need in seconds.');
 _('Audio club app allows creating a special atmosphere for any party of family event!');
@@ -657,13 +656,8 @@ _('This app allows recording TV shows or watch the records made previously.');
 _('App will help you to stay up to date with the changes in rates of currencies from all over the world.');
 _('Weather forecast for three subsequent days in any city of the world.');
 _('Horoscope, city guide and many other things that can be useful for fun and useful pastime.');
-_('Configure the user interface appearance and set up parental control to ensure your child’s safety while he’s using a set-top box.');
-_('System settings will help you to set up network connection, graphics resolution and to change interface language.');
+_('This menu allows setting up the parental control, region and language, remote control and network connection.');
 _('Surf the Internet via built-in browser! To make it easier, you can use the MAGic Remote mobile app or connect the keyboard or mouse via USB port.');
-_('2048 is one of the world’s most popular puzzles. The rules are simple: you need to shuffle all the bars to one side of the game field. Your goal is to reach 2048.');
-_('Lines is the puzzle from 90-s which is still popular. The game’s goal is to remove balls by forming lines of at least five balls of the same color.');
-_('Memory is a game for memory development. Find out how much time you need to open all the matching cards.');
-_('Sudoku is a well-known Japanese puzzle. You need to fill all the cells the way there won\'t be the same two numbers in each row, column or block.');
 /**/
 
 _('The portal is temporarily unavailable.<br>Please try again later.<br>Sorry for the inconvenience.');
@@ -674,18 +668,3 @@ _('Welcome %s<br>We are glad to see you on the Stalker portal!');
 _('Setting the tariff plans and additional services for users on edit page');
 _('Managing of billing date for users on edit page');
 _('Managing of users reseller on edit page');
-
-_('Getting list of seasons and episodes of video');
-_('Getting list of files of episode');
-_('Getting info by one file of episode');
-_('Adding and editing files of episode');
-_('Change accessed status of one file of episode');
-_('Change names and original names for episodes and seasons');
-_('Deleting info about one video file from database');
-_('Adding episodes into season');
-_('Adding seasons into video');
-
-_('Regular quality');
-_('Good quality');
-_('Excellent quality');
-_('Ultra high quality');

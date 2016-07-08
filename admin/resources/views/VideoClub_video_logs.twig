@@ -52,6 +52,7 @@
                     }
                 }
             },
+            "deferLoading": [ {{ app.recordsFiltered }}, {{ app.totalRecords }} ],
             "language": {
                 "url": "{{ app.datatable_lang_file }}"
             },
@@ -64,9 +65,10 @@
             "bInfo":     true,
             "order": [[ 1, "desc" ]],
             "aoColumnDefs": [ 
-                { "searchable": false, "targets": [1, 4 ] }
+{#                { "searchable": false, "targets": [0, 2, 3 ] }#}
             ]
         }).prev('.dataTables_processing').hide('');
+        $('#datatable-1').DataTable().ajax.reload();
     }
 
 

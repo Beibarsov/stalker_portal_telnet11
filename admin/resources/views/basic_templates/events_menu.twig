@@ -284,11 +284,7 @@
     </div>
 </div>
 
-{% include "basic_templates/file-uploader-scripts.twig" %}
-
 <script type="text/javascript" defer>
-
-    var select2Opt = {minimumResultsForSearch: -1, dropdownAutoWidth: false, width: '100%'};
 
     var conf = {
         form: '#form_',
@@ -430,11 +426,15 @@
     }
 
     function DemoSelect2() {
-        $("[id^='s2_']").select2(select2Opt);
+        $.getScript("{{ app.request.baseUrl }}/plugins/select2/i18n/{% if app["language"] %}{{ app["language"] }}{% else %}en{% endif %}.js", function() {
+            $.fn.select2.defaults.set('dropdownAutoWidth', 'false');
+            $.fn.select2.defaults.set('width', '100%');
+            $("[id^='s2_']").select2({minimumResultsForSearch: -1});
+        });
     }
 
     function checkFields(obj, e) {
-        $(obj).select2(select2Opt);
+        $(obj).select2({minimumResultsForSearch: -1});
         var dataName = $(obj).attr('id') == 's2_user_list_type' ? 'data-list-type' : 'data-event-type';
         $("[" + dataName + "]").hide().find('input, select, textarea').attr('disabled', 'disabled');
         $(obj).find('option:selected').each(function () {
@@ -477,3 +477,5 @@
 </script>
     {% endfor %}
 {% endif %}
+
+{% include "basic_templates/file-uploader-scripts.twig" %}

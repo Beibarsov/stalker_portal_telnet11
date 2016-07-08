@@ -11,8 +11,14 @@ use Imagine\Image\Box;
 
 class AudioClubController extends \Controller\BaseStalkerController {
 
+    protected $allStatus = array();
+
     public function __construct(Application $app) {
         parent::__construct($app, __CLASS__);
+        $this->allStatus = array(
+            array('id' => 1, 'title' => $this->setLocalization('Unpublished')),
+            array('id' => 2, 'title' => $this->setLocalization('Published'))
+        );
     }
 
     // ------------------- action method ---------------------------------------
@@ -41,15 +47,18 @@ class AudioClubController extends \Controller\BaseStalkerController {
         $this->app['allCountries'] = ($locale != 'ru' ? array_map(function($row) use ($locale){ $row['name'] = $row['name_en']; return $row; }, $this->db->getAllFromTable('countries')): $this->db->getAllFromTable('countries'));
 
         $this->app['allLanguages'] = $this->db->getAllFromTable('audio_languages');
-        $this->app['allStatus'] = array(
-            array('id' => 1, 'title' => $this->setLocalization('Unpublished')),
-            array('id' => 2, 'title' => $this->setLocalization('Published'))
-        );
+        $this->app['allStatus'] = $this->allStatus;
         
         $attribute = $this->getDropdownAttributeAudioClub();
         $this->checkDropdownAttribute($attribute);
         $this->app['dropdownAttribute'] = $attribute;
 
+        $list = $this->audio_albums_list_json();
+        
+        $this->app['allAudioAlbums'] = $list['data'];
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
+        
         return $this->app['twig']->render($this->getTemplateName(__METHOD__));
     }
     
@@ -70,6 +79,9 @@ class AudioClubController extends \Controller\BaseStalkerController {
         $this->checkDropdownAttribute($attribute);
         $this->app['dropdownAttribute'] = $attribute;
 
+        $this->app['allAlbumComposition'] = array();
+        $this->app['totalRecords'] = 0;
+        $this->app['recordsFiltered'] = 0;
         $this->app['audioAlbumID'] = -1;
         $this->app['allLanguages'] = $this->db->getAllFromTable('audio_languages');
         $this->app['breadcrumbs']->addItem($this->setLocalization('Albums'), $this->app['controller_alias'] . '/audio-albums');
@@ -108,6 +120,11 @@ class AudioClubController extends \Controller\BaseStalkerController {
         $this->checkDropdownAttribute($attribute);
         $this->app['dropdownAttribute'] = $attribute;
         
+        $list = $this->audio_albums_composition_list_json(array('album_id' => $id));
+        
+        $this->app['allAlbumComposition'] = $list['data'];
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
         $this->app['albumName'] = $this->audio_album['name'];
         $this->app['breadcrumbs']->addItem($this->setLocalization('Albums'), $this->app['controller_alias'] . '/audio-albums');
         $this->app['breadcrumbs']->addItem($this->setLocalization('Edit audio album'));
@@ -120,7 +137,12 @@ class AudioClubController extends \Controller\BaseStalkerController {
         }
         
         $this->app['dropdownAttribute'] = $this->getShortDropdownAttribute();
-
+        $list = $this->audio_artists_list_json();
+        
+        $this->app['allAudioArtists'] = $list['data'];
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
+        
         return $this->app['twig']->render($this->getTemplateName(__METHOD__));
     }
     
@@ -130,7 +152,12 @@ class AudioClubController extends \Controller\BaseStalkerController {
         }
 
         $this->app['dropdownAttribute'] = $this->getShortDropdownAttribute();
-
+        $list = $this->audio_genres_list_json();
+        
+        $this->app['allAudioGenres'] = $list['data'];
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
+        
         return $this->app['twig']->render($this->getTemplateName(__METHOD__));
     }
        
@@ -140,7 +167,12 @@ class AudioClubController extends \Controller\BaseStalkerController {
         }
 
         $this->app['dropdownAttribute'] = $this->getShortDropdownAttribute();
-
+        $list = $this->audio_languages_list_json();
+        
+        $this->app['allAudioLanguages'] = $list['data'];
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
+        
         return $this->app['twig']->render($this->getTemplateName(__METHOD__));
     }
     
@@ -150,10 +182,23 @@ class AudioClubController extends \Controller\BaseStalkerController {
         }
 
         $this->app['dropdownAttribute'] = $this->getShortDropdownAttribute();
-
+        $list = $this->audio_years_list_json();
+        
+        $this->app['allAudioYears'] = $list['data'];
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
+        
         return $this->app['twig']->render($this->getTemplateName(__METHOD__));
     }
     
+    public function audio_logs() {
+        if ($no_auth = $this->checkAuth()) {
+            return $no_auth;
+        }
+
+        return $this->app['twig']->render($this->getTemplateName(__METHOD__));
+    }
+
     //----------------------- ajax method --------------------------------------
 
     public function audio_albums_list_json($param = array()) {
@@ -246,7 +291,7 @@ class AudioClubController extends \Controller\BaseStalkerController {
         }
 
         $data = array();
-        $data['action'] = 'manageAudioAlbum';
+        $data['action'] = 'removeAudioAlbum';
         $data['id'] = $this->postData['albumsid'];
         $data['album'] = $this->db->deleteAudioAlbum(array('id' => $this->postData['albumsid']));
         $data['genre'] = $this->db->deleteAudioGenre(array('album_id' => $this->postData['albumsid']));

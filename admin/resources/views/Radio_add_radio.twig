@@ -118,8 +118,6 @@
     </div>
     <script type="text/javascript" defer>
 
-        var select2Opt = {minimumResultsForSearch: -1, dropdownAutoWidth: false, width: '100%'};
-
         var conf = {
             form: '#form_',
             lang : '{{ app.language }}',
@@ -136,7 +134,11 @@
         };
 
         function DemoSelect2() {
-            $('#form_volume_correction').select2(select2Opt);
+            $.getScript("{{ app.request.baseUrl }}/plugins/select2/i18n/{% if app["language"] %}{{ app["language"] }}{% else %}en{% endif %}.js", function () {
+                $.fn.select2.defaults.set('dropdownAutoWidth', 'false');
+                $.fn.select2.defaults.set('width', '100%');
+                $('#form_volume_correction').select2({minimumResultsForSearch: -1});
+            });
         }
         
         function yelp() {
@@ -180,6 +182,7 @@
                     }
                     return false;
                 });
+
 
                 LoadSelect2Script(DemoSelect2);
             });

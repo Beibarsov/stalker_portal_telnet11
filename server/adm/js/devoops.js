@@ -31,10 +31,6 @@
         }
     });*/
 
-if (typeof (load_page_data) !== 'function') {
-    var load_page_data = function(){};
-}
-
 $(document).on("click", "div.dropdown-menu *", function(e){
     e.stopPropagation();
 });
@@ -54,8 +50,15 @@ $('#status').removeClass('dropup');
 $('.filter').removeClass('dropup'); 
 for (var f = document.forms, i = f.length; i--;)f[i].setAttribute("novalidate", i)
 function LoadSelect2Script(callback) {
-    if (callback && typeof (callback) === "function") {
-        callback();
+    if (!$.fn.select2) {
+        $.getScript('plugins/select2/select2.full.min.js', callback);
+    }
+    else {
+        $.fn.select2.defaults.set({dropdownAutoWidth: 'false', width: 'auto'});
+
+        if (callback && typeof (callback) === "function") {
+            callback();
+        }
     }
 }
 //
@@ -63,47 +66,67 @@ function LoadSelect2Script(callback) {
 //  homepage: http://datatables.net v1.9.4 license - GPL or BSD
 //
 function LoadDataTablesScripts(callback) {
+    function LoadDatatables() {
+        $.getScript('plugins/datatables/jquery.dataTables.js', function () {
+            $.getScript('plugins/datatables/ZeroClipboard.js', function () {
+                $.getScript('plugins/datatables/TableTools.js', function () {
+                    $.getScript('plugins/datatables/fnReloadAjax.js', function () {
+                        $.getScript('plugins/datatables/dataTables.bootstrap.js', function(){
+                            $.fn.dataTableExt.oApi.fnDataUpdate = function ( oSettings, nRowObject, iRowIndex ){
+                                $(nRowObject).find("TD").each( function(i) {
+                                    var iColIndex = oSettings.oApi._fnVisibleToColumnIndex( oSettings, i );
+                                    oSettings.oApi._fnSetCellData( oSettings, iRowIndex, iColIndex, $(this).html() );
+                                } );
+                            };
 
-    $.fn.dataTableExt.oApi.fnDataUpdate = function ( oSettings, nRowObject, iRowIndex ){
-        $(nRowObject).find("TD").each( function(i) {
-            var iColIndex = oSettings.oApi._fnVisibleToColumnIndex( oSettings, i );
-            oSettings.oApi._fnSetCellData( oSettings, iRowIndex, iColIndex, $(this).html() );
-        } );
-    };
+                            $.fn.dataTableExt.oApi.fnFeatureReloadButtonHtml = function ( oSettings, nRowObject, iRowIndex ){
+                                alert('jjj');
+                            };
 
-    $.fn.dataTableExt.aoFeatures.push( {
-        "fnInit": function( oDTSettings ) {
-            var filterContainer = $(oDTSettings.nTableWrapper).find("#" + oDTSettings.sTableId + '_filter');
-            if (filterContainer.length) {
-                                        filterContainer.after('<button id="dataTables_ajax_update_button" class="btn dataTables_ajax_update_button" type="button"><i class="fa fa-refresh"></i></button>');
-                $(document).on("click", "#dataTables_ajax_update_button", function(){
-                    $("#" + oDTSettings.sTableId).DataTable().ajax.reload();
+                            $.fn.dataTableExt.aoFeatures.push( {
+                                "fnInit": function( oDTSettings ) {
+                                    var filterContainer = $(oDTSettings.nTableWrapper).find("#" + oDTSettings.sTableId + '_filter');
+                                    if (filterContainer.length) {
+                                        filterContainer.after('<button id="dataTables_ajax_update_button" class="btn" type="button"><i class="fa fa-refresh"></i></button>');
+                                        $(document).on("click", "#dataTables_ajax_update_button", function(){
+                                            $("#" + oDTSettings.sTableId).DataTable().ajax.reload();
+                                        });
+                                    }
+                                },
+                                "cFeature": "A"
+                            } );
+							
+                            $.fn.dataTable.defaults.sDom += "A";
+
+                            if (typeof (window.stateSaveReject) == 'undefined' || !window.stateSaveReject) {
+                                $.fn.dataTable.defaults.stateSave = true;
+                                $.fn.dataTable.defaults.stateDuration = 0;
+                                $.fn.dataTable.defaults.stateSaveCallback = function(settings,data) {
+                                    var page = window.location.href.split("/");
+                                    page = (page[page.length - 1] ? page[page.length - 1] : page[page.length - 2]).replace(/[^\w]/ig, '');
+                                    console.log(page + " dataTable save settings");
+                                    localStorage.setItem( page + 'DataTables_' + settings.sInstance, JSON.stringify(data) )
+                                };
+                                $.fn.dataTable.defaults.stateLoadCallback = function(settings) {
+                                    var page = window.location.href.split("/");
+                                    page = (page[page.length - 1] ? page[page.length - 1] : page[page.length - 2]).replace(/[^\w]/ig, '');
+                                    console.log(page + " dataTable load settings");
+                                    return JSON.parse( localStorage.getItem( page + 'DataTables_' + settings.sInstance ) )
+                                };
+                            }
+                            callback();
+                        });
+                    });
                 });
-            }
-        },
-        "cFeature": "A"
-    } );
-    $.fn.dataTable.defaults.sDom += "A";
-
-    if (typeof (window.stateSaveReject) == 'undefined' || !window.stateSaveReject) {
-        $.fn.dataTable.defaults.stateSave = true;
-        $.fn.dataTable.defaults.stateDuration = 0;
-        $.fn.dataTable.defaults.stateSaveCallback = function(settings,data) {
-            var page = window.location.href.split("/");
-            page = (page[page.length - 1] ? page[page.length - 1] : page[page.length - 2]).replace(/[^\w]/ig, '');
-            /*console.log(page + " dataTable save settings");*/
-            localStorage.setItem( page + 'DataTables_' + settings.sInstance, JSON.stringify(data) )
-        };
-        $.fn.dataTable.defaults.stateLoadCallback = function(settings) {
-            var page = window.location.href.split("/");
-            page = (page[page.length - 1] ? page[page.length - 1] : page[page.length - 2]).replace(/[^\w]/ig, '');
-            /*console.log(page + " dataTable load settings");*/
-            return JSON.parse( localStorage.getItem( page + 'DataTables_' + settings.sInstance ) )
-        };
+            });
+        });
     }
-
-    if (callback && typeof (callback) === "function") {
-        callback();
+    if (!$.fn.dataTables) {
+        LoadDatatables();
+    } else {
+        if (callback && typeof (callback) === "function") {
+            callback();
+        }
     }
 }
 
@@ -500,7 +523,7 @@ $(document).ready(function () {
             .on('click', '.collapse-link', function (e) {
                 e.preventDefault();
                 var box = $(this).closest('div.box');
-                var button = $(this).find('i.fa-chevron-up i.fa-chevron-down');
+                var button = $(this).find('i');
                 var content = box.find('div.box-content');
                 content.slideToggle('fast');
                 button.toggleClass('fa-chevron-up').toggleClass('fa-chevron-down');
@@ -648,6 +671,55 @@ $(document).ready(function () {
     $(document).on('click', "#add_channel .box-name .toggle-switch", function (e) {
         e.stopPropagation();
         e.preventDefault();
+        return false;
+    });
+
+    $(document).on('show', ".box-content[id^='add_channel_']", function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        $(this).closest('.box').children('.box-header').find('.header_check_info').hide();
+        return false;
+    });
+    $(document).on('hide', ".box-content[id^='add_channel_']", function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        $(this).closest('.box').children('.box-header').find('.header_check_info').show();
+        return false;
+    });
+    $(document).on('show hide', "#add_channel_storage_save", function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        $(this).closest('.box').children('.box-header').find("input[type='checkbox']").prop("checked", ($(this).find("input[type='checkbox']:checked").length != 0));
+        return false;
+    });
+    $(document).on('show hide', "#add_channel_EPG", function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        $(this).closest('.box').children('.box-header').find("input[type='checkbox']").prop("checked", ($(this).find("input[type='text']").val().trim() !== ''));
+        return false;
+    });
+    $(document).on('show hide', "#add_channel_safety", function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        $(this).closest('.box').children('.box-header').find("input[type='checkbox']").prop("checked", ($(this).find("input[name='age_restriction']:checked").length != 0));
+        return false;
+    });
+    $(document).on('show hide', "#add_channel_type", function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        $(this).closest('.box').children('.box-header').find("input[type='checkbox']").prop("checked", ($(this).find("input[name='base_channel']:checked").length != 0));
+        return false;
+    });
+    $(document).on('show hide', "#add_channel_usb_store", function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        $(this).closest('.box').children('.box-header').find("input[type='checkbox']").prop("checked", ($(this).find("input[type='checkbox']:checked").length != 0));
+        return false;
+    });
+    $(document).on('show hide', "#add_channel_link_monitoring, #add_channel_load_balancing", function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        $(this).closest('.box').children('.box-header').find("input[type='checkbox']").prop("checked", ($(this).find("input[type='radio']:checked").val() == 'on'));
         return false;
     });
 
@@ -833,11 +905,11 @@ $(document).ready(function () {
     
 });
 
-function getURLFilterString(obj, href){
-    var hrefM = href ? href : window.location.href;
+function getURLFilterString(obj){
+    var hrefM = window.location.href;
     var filterName = $(obj).closest('div[data-tvfilter]').data('tvfilter');
     var filter_str = 'filters[' + filterName + ']=' + ((obj.tagName == "A") ? $(obj).data('filter'): $(obj).prev('input').val() );
-    if (window.location.search == '' && !href) {
+    if (window.location.search == '') {
         return hrefM + '?' + filter_str;
     } else {
         var filterRegExp = new RegExp('filters\\[' + filterName + '[^=]*=[^&|^$]*', 'ig');
@@ -1078,28 +1150,6 @@ function ajaxPostSend(url, sendData, alertMsg, consoleMsg, async){
     });
 })(jQuery);
 
-(function($) {
-    $.fn.selectRange = function(start, end) {
-        if(end === undefined) {
-            end = start;
-        }
-        return this.each(function() {
-            if('selectionStart' in this) {
-                this.selectionStart = start;
-                this.selectionEnd = end;
-            } else if(this.setSelectionRange) {
-                this.setSelectionRange(start, end);
-            } else if(this.createTextRange) {
-                var range = this.createTextRange();
-                range.collapse(true);
-                range.moveEnd('character', end);
-                range.moveStart('character', start);
-                range.select();
-            }
-        });
-    };
-})(jQuery);
-
 function setDropdownAttribute(sendData){
     var param = '';
     var filterLink = $("a.btn-success.active[href*='filters']");
@@ -1241,12 +1291,4 @@ function JSErrorModalBox(data){
         notty('<span>' + words['Failed'] + '! ' + msg + '!</span>', 'error');
     }
     $("#modalbox").data('complete', 1);
-}
-
-function setActiveFilter(obj){
-    var parent = $(obj).closest('div[data-tvfilter]');
-    parent.removeClass('open').data('filterval', $(obj).data('filter'));
-    parent.children('a').children("span:last-of-type").text($(obj).find('span').text());
-    $(obj).closest('ul').find("a").removeClass('active');
-    $(obj).addClass('active');
 }

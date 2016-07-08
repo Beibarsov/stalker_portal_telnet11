@@ -1,41 +1,38 @@
-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
-fGseaIlV7ACbiuwUyyhJfEltn64=
+<?php
+
+namespace Stalker\Lib\OAuth;
+
+class BearerAccessType extends AccessTokenType
+{
+    protected $type = 'Bearer';
+
+    protected function parseAuthHeader(){
+
+        if (preg_match('/Bearer\s+(.*)$/i', $this->request->getAuthorization(), $matches)){
+            $this->access_token = trim($matches[1]);
+        }else{
+            throw new AuthBadRequest("Wrong Bearer authorization header");
+        }
+    }
+
+    public function getToken(){
+        return $this->access_token;
+    }
+
+    public function checkRequest(){
+
+        $session = $this->access_handler->getAccessSessionByToken($this->access_token);
+
+        if (empty($session)){
+            throw new AuthUnauthorized("Access token wrong or expired");
+        }
+
+        if (preg_match("/\/users\/(\d+)/", $this->request->getRequestUri(), $match)){
+            if ($match[1] != $session['uid']){
+                throw new AuthForbidden("Access denied");
+            }
+        }
+    }
+}
+
+?>

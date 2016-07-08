@@ -2393,7 +2393,7 @@ player.prototype.play = function(item){
 
     _debug('stb.cur_place', stb.cur_place);
 
-    if (this.media_type == 'stream' && !stb.player.cur_media_item.hasOwnProperty('series') && !stb.player.cur_media_item.hasOwnProperty('is_file')){
+    if (this.media_type == 'stream' && !stb.player.cur_media_item.hasOwnProperty('series')){
 
         if (item.hasOwnProperty('open') && !item.open){
             _debug('channel is closed');
@@ -2427,42 +2427,34 @@ player.prototype.play = function(item){
                         self.cur_media_item.error = '';
                         module.tv.preview_msg.innerHTML = '';
                     }
-                    if (result.cmd && result.cmd.search(/%mac%/ig) !== -1) {
-                        result.cmd = result.cmd.replace(/%mac%/ig, stb.profile.mac);
-                    }
+
                     stb.player.play_now(result);
                     //}
                 };
 
                 this.create_link('itv', cmd, 0);
             }else{
-                if (cmd && cmd.search(/%mac%/ig) !== -1) {
-                    cmd = cmd.replace(/%mac%/ig, stb.profile.mac);
-                }
                 this.play_now(cmd);
             }
 
-            if (this.is_tv){
+            if (this.is_tv && this.cur_tv_item.lock != '1'){
 
-                this.send_last_tv_id(this.cur_tv_item.id, this.cur_tv_item.lock == '1');
+                this.send_last_tv_id(this.cur_tv_item.id);
 
-                if (this.cur_tv_item.lock != '1') {
+                if (stb.user.fav_itv_on){
 
-                    if (stb.user.fav_itv_on) {
+                    this.f_ch_idx = this.fav_channels.getIdxByVal('number', item.number);
 
-                        this.f_ch_idx = this.fav_channels.getIdxByVal('number', item.number);
+                    this.hist_f_ch_idx.push(item);
+                    this.hist_f_ch_idx.shift();
+                    _debug('this.hist_f_ch_idx', this.hist_f_ch_idx);
+                }else{
 
-                        this.hist_f_ch_idx.push(item);
-                        this.hist_f_ch_idx.shift();
-                        _debug('this.hist_f_ch_idx', this.hist_f_ch_idx);
-                    } else {
+                    this.ch_idx = this.channels.getIdxByVal('number', item.number);
 
-                        this.ch_idx = this.channels.getIdxByVal('number', item.number);
-
-                        this.hist_ch_idx.push(item);
-                        this.hist_ch_idx.shift();
-                        _debug('this.hist_ch_idx', this.hist_ch_idx);
-                    }
+                    this.hist_ch_idx.push(item);
+                    this.hist_ch_idx.shift();
+                    _debug('this.hist_ch_idx', this.hist_ch_idx);
                 }
             }
         }
@@ -2488,12 +2480,6 @@ player.prototype.play = function(item){
         var series_number = item.cur_series || 0;
         if (stb.player.cur_media_item.rtsp_url) {
             cmd = '/media/'+this.cur_media_item.id+'.mpg';
-
-            if (this.cur_media_item.hasOwnProperty('position')){
-                cmd += ' position:'+this.cur_media_item.position;
-            }
-        }else if(stb.player.cur_media_item.is_file){
-            cmd = '/media/file_'+this.cur_media_item.id+'.mpg';
 
             if (this.cur_media_item.hasOwnProperty('position')){
                 cmd += ' position:'+this.cur_media_item.position;
@@ -3196,7 +3182,7 @@ player.prototype.show_info = function(item, direct_call){
         stb.clock.show();
         
         if (item.cur_series && parseInt(item.cur_series) > 0){
-            this.info.pos_series.innerHTML = (item.cur_season ? item.cur_season + ' ' + get_word('player_season') + ', ' : '') + item.cur_series + ' ' + get_word('player_series');
+            this.info.pos_series.innerHTML = item.cur_series + ' ' + get_word('player_series');
         }else if ((this.cur_media_item.hasOwnProperty('live_date') || this.pause.on) && this.active_time_shift){
             this.info.pos_series.innerHTML = module.time_shift.get_current_date();
         }else{
@@ -3420,13 +3406,9 @@ player.prototype.switch_channel = function(dir, show_info, do_not_invert){
     this.play(item);
 };
 
-player.prototype.send_last_tv_id = function(id, censored){
-    _debug('send_last_tv_id', id, censored);
-
-    censored = censored || false;
-
-    _debug('censored', censored);
-
+player.prototype.send_last_tv_id = function(id){
+    _debug('send_last_tv_id', id);
+    
     var self = this;
     
     window.clearTimeout(this.send_played_itv_timer);
@@ -3434,15 +3416,11 @@ player.prototype.send_last_tv_id = function(id, censored){
     this.send_played_itv_timer = window.setTimeout(
 
         function(){
-            self.send_played_itv(id, censored);
+            self.send_played_itv(id);
         },
         
         this.send_last_tv_id_to
     );
-
-    if (censored){
-        return;
-    }
 
     _debug('this.last_tv_id', this.last_tv_id);
 
@@ -3474,16 +3452,13 @@ player.prototype.send_last_tv_id = function(id, censored){
     )
 };
 
-player.prototype.send_played_itv = function(id, censored){
-
-    censored = censored || false;
-
+player.prototype.send_played_itv = function(id){
+    
     stb.load(
         {
             "type"   : "itv",
             "action" : "set_played",
-            "itv_id" : id,
-            "censored" : censored
+            "itv_id" : id
         },
         
         function(result){
@@ -5518,16 +5493,15 @@ player.prototype.build_con_menu = function(){
     }
 
     if (stb && stb.Set3DConversionMode){
-        mode = stb.Get3DConversionMode ? stb.Get3DConversionMode(): 0;
         this.con_menu.map.unshift(
             {
                 "title" : get_word('3D mode'),
                 "type"  : "switch",
                 "cmd"   : [
-                    {"title" : get_word('mode {0}').format(1), "cmd" : function(){_debug('mode 1'); stb.Set3DConversionMode(0)}, active : (mode == 0)},
-                    {"title" : get_word('mode {0}').format(2), "cmd" : function(){_debug('mode 2'); stb.Set3DConversionMode(1)}, active : (mode == 1)},
-                    {"title" : get_word('mode {0}').format(3), "cmd" : function(){_debug('mode 3'); stb.Set3DConversionMode(2)}, active : (mode == 2)},
-                    {"title" : get_word('mode {0}').format(4), "cmd" : function(){_debug('mode 4'); stb.Set3DConversionMode(3)}, active : (mode == 3)}
+                    {"title" : get_word('mode {0}').format(1), "cmd" : function(){_debug('mode 1'); stb.Set3DConversionMode(0)}, active : true},
+                    {"title" : get_word('mode {0}').format(2), "cmd" : function(){_debug('mode 2'); stb.Set3DConversionMode(1)}},
+                    {"title" : get_word('mode {0}').format(3), "cmd" : function(){_debug('mode 3'); stb.Set3DConversionMode(2)}},
+                    {"title" : get_word('mode {0}').format(4), "cmd" : function(){_debug('mode 4'); stb.Set3DConversionMode(3)}}
                 ]
             }
         );

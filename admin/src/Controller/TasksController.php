@@ -13,6 +13,10 @@ class TasksController extends \Controller\BaseStalkerController {
     protected $taskType = array();
     protected $taskState = array();
     protected $taskAllState = array();
+    private $videoQuality = array(
+            0=>array('id' => '1', 'title' => 'SD'), 
+            1=>array('id' => '2', 'title' => 'HD'), 
+        );
     private $stateColor = array('primary','success','warning','danger', 'default');
     
     private $uid = FALSE;
@@ -63,7 +67,16 @@ class TasksController extends \Controller\BaseStalkerController {
         $attribute = $this->getDropdownAttribute();
         $this->checkDropdownAttribute($attribute);
         $this->app['dropdownAttribute'] = $attribute;
-
+        
+        $list = $this->tasks_list_json();
+        
+        $this->app['allData'] = $list['data'];
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
+        $this->app['task_type_title'] = $this->getTaskTitle($list['table']);
+        $this->app['task_type'] = $list['table'];
+        $this->app['taskStateColor'] = $this->stateColor;
+        
         if (empty($this->data['filters']['task_type'])) {
             if (empty($this->data['filters'])) {
                 $this->data['filters'] = array('task_type' => 'moderator_tasks');
@@ -71,10 +84,6 @@ class TasksController extends \Controller\BaseStalkerController {
                 $this->data['filters']['task_type'] = 'moderator_tasks';
             }
         }
-
-        $this->app['task_type_title'] = $this->getTaskTitle($this->data['filters']['task_type']);
-        $this->app['task_type'] = $this->data['filters']['task_type'];
-        $this->app['taskStateColor'] = $this->stateColor;
         
         $this->app['filters'] = $this->data['filters'];
         $this->app['breadcrumbs']->addItem($this->setLocalization('List of tasks in the category') . " '{$this->app['task_type_title']}'");
@@ -90,14 +99,20 @@ class TasksController extends \Controller\BaseStalkerController {
         unset($task_report_state[3]);
         $this->app['taskType'] = $this->taskType;
         $this->app['taskState'] = $task_report_state;
-        $this->app['videoQuality'] = array(
-            0=>array('id' => '1', 'title' => 'SD'),
-            1=>array('id' => '2', 'title' => 'HD'),
-        );
+        $this->app['videoQuality'] = $this->videoQuality;
 
         $attribute = $this->getReportDropdownAttribute();
         $this->checkDropdownAttribute($attribute);
         $this->app['dropdownAttribute'] = $attribute;
+        
+        $list = $this->tasks_report_json();
+        
+        $this->app['allData'] = $list['data'];
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
+        $this->app['task_type_title'] = $this->getTaskTitle($list['table']);
+        $this->app['task_type'] = $list['table'];
+        $this->app['taskStateColor'] = $this->stateColor;
 
         if (empty($this->data['filters']['task_type'])) {
             if (empty($this->data['filters'])) {
@@ -106,13 +121,9 @@ class TasksController extends \Controller\BaseStalkerController {
                 $this->data['filters']['task_type'] = 'moderator_tasks';
             }
         }
-
-        $this->app['task_type_title'] = $this->getTaskTitle($this->data['filters']['task_type']);
-        $this->app['task_type'] = $this->data['filters']['task_type'];
-        $this->app['taskStateColor'] = $this->stateColor;
-
+        
         if ($this->data['filters']['task_type'] == 'moderator_tasks'){
-            $this->app['allVideoDuration'] = 0;                              //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            $this->app['allVideoDuration'] = $list['videotime'];                              //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         }
         $this->app['filters'] = $this->data['filters'];
         return $this->app['twig']->render($this->getTemplateName(__METHOD__));
@@ -175,7 +186,8 @@ class TasksController extends \Controller\BaseStalkerController {
                $last_row = $row;
             }
         }
-
+        
+        
         if (empty($last_row)) {
             $tmp = $this->app['taskAll'];
             $last_row = end($tmp);
@@ -400,25 +412,20 @@ class TasksController extends \Controller\BaseStalkerController {
         );
         $error = "Error";
         $param = (empty($param) ? (!empty($this->data)?$this->data: $this->postData) : $param);
-
+        
         $like_filter = array();
         $filter = $this->getTasksFilters($like_filter);
         if (!empty($filter['task_type'])) {
             $response['table'] = $filter['task_type'];
         }
-
-        if (array_key_exists('filters', $param)) {
-            $param = array_merge($param, $param['filters']);
-            unset($param['filters']);
-        }
-
         if (!empty($param['task_type'])) {
             $response['table'] = $param['task_type'];  
         }
         unset($filter['task_type']);
-
+        
         $func = "getFieldsReport" . ucfirst($response['table']);
         $filds_for_select = $this->$func($response['table']);
+        
 
         $query_param = $this->prepareDataTableParams($param, array('operations', 'RowOrder', '_'));
 
@@ -468,9 +475,7 @@ class TasksController extends \Controller\BaseStalkerController {
                 $query_param['where']["$prefix.add_by"]=$this->admin->getId();
             }
         }
-
-        /*print_r($query_param);exit;*/
-
+        
         $response['recordsTotal'] = $this->db->getTotalRowsTasksList($query_param, TRUE);
         $response["recordsFiltered"] = $this->db->getTotalRowsTasksList($query_param);
         
@@ -608,7 +613,7 @@ class TasksController extends \Controller\BaseStalkerController {
         
         $return["end_time"] = "CAST(M_T.`end_time` as CHAR ) as `end_time`";
         $return["video_quality"] = "if(V.hd = 0, 'SD', 'HD') as `video_quality`";
-        $return["duration"] = "CAST(V.`time` as UNSIGNED) as `duration`";
+        $return["duration"] = "V.`time` as `duration`";
         $return["archived"] = "(archived<>0) as `archived`";
         
         return $return;

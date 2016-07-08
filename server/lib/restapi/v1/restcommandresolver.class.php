@@ -19,6 +19,7 @@ class RESTCommandResolver
         },explode('_', $request->getResource())));
 
         $class = 'Stalker\Lib\RESTAPI\v1\RESTCommand'.ucfirst($resource);
+        
 
         if (!class_exists($class)){
             throw new RESTCommandResolverException('Resource "'.$resource.'" does not exist');

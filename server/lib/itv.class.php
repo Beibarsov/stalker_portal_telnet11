@@ -160,7 +160,6 @@ class Itv extends AjaxResponse implements \Stalker\Lib\StbApi\Itv
                 $channel['wowza_tmp_link']     = $link['wowza_tmp_link'];
                 $channel['nginx_secure_link']  = $link['nginx_secure_link'];
                 $channel['use_load_balancing'] = $link['use_load_balancing'];
-                $channel['xtream_codes_support'] = $link['xtream_codes_support'];
             }
         }
 
@@ -214,6 +213,7 @@ class Itv extends AjaxResponse implements \Stalker\Lib\StbApi\Itv
         }
 
         if ($channel['use_http_tmp_link']){
+
             if ($channel['wowza_tmp_link']){
                 $key = $this->createTemporaryLink("1");
 
@@ -226,21 +226,7 @@ class Itv extends AjaxResponse implements \Stalker\Lib\StbApi\Itv
                         $channel['cmd'] = $channel['cmd'].'?'.$key;
                     }
                 }
-            } elseif ($channel['xtream_codes_support']) {
-                $max_seconds = 3; #Max seconds for the hash to be valid until it expires.
-
-                #Get Channel ID
-                if (preg_match('/\/([0-9]+)\.ts$/', $channel['cmd'], $id_match) && (extension_loaded('mcrypt') || extension_loaded('mcrypt.so'))) {
-                    $key = XtreamCodes::getHash($this->stb->mac, $this->stb->ip, $id_match[1], $max_seconds);
-                    if (!$key) {
-                        throw new ItvLinkException('link_fault');
-                    } else {
-                        $channel['cmd'] .= (strpos($channel['cmd'], '?') ? '&' : '?') . 'stalker_key=' . $key;
-                    }
-                } else {
-                    throw new ItvLinkException('link_fault');
-                }
-            } else if (!empty($link) && $link['flussonic_tmp_link']){
+            }else if (!empty($link) && $link['flussonic_tmp_link']){
                 $key = $this->createTemporaryLink($this->stb->id);
 
                 if (!$key){
@@ -364,9 +350,8 @@ class Itv extends AjaxResponse implements \Stalker\Lib\StbApi\Itv
     }
     
     public function setPlayed(){
-        $itv_id   = intval($_REQUEST['itv_id']);
-        $censored = intval($_REQUEST['censored']);
-
+        $itv_id = intval($_REQUEST['itv_id']);
+        
         $this->db->insert('played_itv', array(
                                             'itv_id'      => $itv_id,
                                             'uid'         => $this->stb->id,
@@ -377,11 +362,9 @@ class Itv extends AjaxResponse implements \Stalker\Lib\StbApi\Itv
         $this->db->update('users',
                           array('time_last_play_tv' => 'NOW()'),
                           array('id' => $this->stb->id));
-
-        if (!$censored){
-            $this->setLastId($itv_id);
-        }
-
+        
+        $this->setLastId($itv_id);
+        
         return true;
     }
     
@@ -666,9 +649,8 @@ class Itv extends AjaxResponse implements \Stalker\Lib\StbApi\Itv
         array_unshift($genres, array('id' => '*', 'title' => $this->all_title));
 
         $genres = array_map(function($item){
-            $item['alias']    = strtolower($item['title']);
-            $item['title']    = _($item['title']);
-            $item['censored'] = (int) $item['censored'];
+            $item['alias'] = strtolower($item['title']);
+            $item['title'] = _($item['title']);
             return $item;
         }, $genres);
         

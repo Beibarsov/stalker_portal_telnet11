@@ -36,11 +36,12 @@
     </div>
     <script type="text/javascript" defer>
         {% if attribute(app, 'reseller') is defined and not app['reseller'] %}
-
-        var select2Opt = {minimumResultsForSearch: -1, dropdownAutoWidth: false, width: '100%'};
-
         function DemoSelect2() {
-            $("[id^='s2_']").select2(select2Opt);
+            $.getScript("{{ app.request.baseUrl }}/plugins/select2/i18n/{% if app["language"] %}{{ app["language"] }}{% else %}en{% endif %}.js", function() {
+                $.fn.select2.defaults.set('dropdownAutoWidth', 'false');
+                $.fn.select2.defaults.set('width', '100%');
+                $("[id^='s2_']").select2({minimumResultsForSearch: -1});
+            });
         }
         {% endif %}
         function TestTable1() {
@@ -59,11 +60,18 @@
                 "processing": true,
                 "serverSide": true,
                 "ajax": {
-                    "url": "{{ app.request.baseUrl }}/{{ app.controller_alias }}/users-consoles-groups-list-json"
+                    "url": "{{ app.request.baseUrl }}/{{ app.controller_alias }}/users-consoles-groups-list-json",
+                    "data": function (d) {
+                        var params = $.parseParams(window.location.href.split('?')[1] || ''); //window.location.href.split('?')[1] || ''
+                        for (var i in params) {
+                            d[i] = params[i];
+                        }
+                    }
                 },
                 "language": {
                     "url": "{{ app.datatable_lang_file }}"
                 },
+                "deferLoading": [{{ app.recordsFiltered }}, {{ app.totalRecords }}],
                 {% if attribute(app, 'dropdownAttribute') is defined %}
                 {{ main_macro.get_datatable_column(app['dropdownAttribute']) }}
                 {% endif %}
@@ -76,6 +84,7 @@
                     {"sortable": false, "targets": [-1]}
                 ]
             }).prev('.dataTables_processing').hide('');
+            $('#datatable-1').DataTable().ajax.reload();
         }
 
         function yelp() {
@@ -168,7 +177,7 @@
                             <button type="reset" class="btn btn-default pull-right" >{{ 'Cancel'|trans }}</button>\n\
                         </div>');
 
-                    $("#target_reseller").select2(select2Opt);
+                    $("#target_reseller").select2({minimumResultsForSearch: -1});
 
                     $("#modalbox").show();
                     $(this).closest('div.open').removeClass('open');

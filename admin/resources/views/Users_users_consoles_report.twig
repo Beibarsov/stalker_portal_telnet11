@@ -76,6 +76,7 @@
                         d.print = false;
                     }
                 },
+                "deferLoading": [ {{ app.recordsFiltered }}, {{ app.totalRecords }} ],
                 "language": {
                     "url": "{{ app.datatable_lang_file }}"
                 },
@@ -86,10 +87,11 @@
                 "bPaginate": true,
                 "bInfo": true,
                 "aoColumnDefs": [
-                    {"searchable": false, "targets": [0, -2]},
+                    {"searchable": false, "targets": [0]},
                     {"sortable": false, "targets": [0]}
                 ]
             }).prev('.dataTables_processing').hide('');
+            $('#datatable-1').DataTable().ajax.reload();
         }
 
         function yelp() {
@@ -98,7 +100,7 @@
                 $('head').append('<link href="{{ app.request.baseUrl }}/css/dataTables.tableTools.css" type="text/css" rel="stylesheet" />');
                 $(document).on('click', '.btn.DTTT_button_print', function(){
                     $("#table_container").removeClass('col-sm-offset-2');{#.parents().map(function(){$(this).css('padding-left', 0);});#}
-                });
+                })
                 $(document).on('click', "a.main_ajax", function (e) {
                     e.stopPropagation();
                     e.preventDefault();

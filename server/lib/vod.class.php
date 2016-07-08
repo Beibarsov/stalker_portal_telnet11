@@ -31,118 +31,24 @@ class Vod extends AjaxResponse implements \Stalker\Lib\StbApi\Vod
 
     public function createLink()
     {
-
-        if (preg_match("/\/media\/(\d+).mpg(.*)/", $_REQUEST['cmd'], $tmp_arr)){
-            $file_id  = 0;
-            $media_id = $tmp_arr[1];
-        }elseif (preg_match("/\/media\/file_(\d+).mpg(.*)/", $_REQUEST['cmd'], $tmp_arr)){
-            $file_id = $tmp_arr[1];
-
-            $file = Video::getFileById($file_id);
-
-            if (!empty($file)){
-                $media_id = $file['video_id'];
-            }else{
-                $media_id = 0;
-            }
-
-            if (!empty($_REQUEST['series'])){
-
-                $season_id = Mysql::getInstance()->from('video_season_series')
-                    ->where(array(
-                        'id' => $file['series_id']
-                    ))
-                    ->get()
-                    ->first('season_id');
-
-                $episode = Mysql::getInstance()->from('video_season_series')
-                    ->where(array(
-                        'season_id'     => $season_id,
-                        'series_number' => intval($_REQUEST['series'])
-                    ))
-                    ->get()
-                    ->first();
-
-                $file_id = Mysql::getInstance()->from('video_series_files')
-                    ->where(array(
-                        'series_id' => $episode['id']
-                        ))
-                    ->get()
-                    ->first('id');
-            }
+        // Check for movie id and series exists in request
+        if (array_key_exists("cmd", $_REQUEST) && array_key_exists("series", $_REQUEST) && $_REQUEST["series"] * 1 > 0)
+        {
+            $id = (int) $_REQUEST["cmd"];
+            $series = (int) $_REQUEST["series"];
+        } else {
+            return array("cmd" => $_REQUEST["cmd"]);
         }
 
-        $params = $tmp_arr[2];
+        $offset = $series - 1;
+        $query = "SELECT f.path FROM files f, movies_files mf WHERE mf.movie_id=".$id." AND f.file_id = mf.file_id ORDER BY f.name ASC LIMIT ".$offset.",1";
 
-        $forced_storage = $_REQUEST['forced_storage'];
-        $disable_ad     = $_REQUEST['disable_ad'];
+        $result["cmd"] = str_replace("/mnt/media/Stream", "ffrt3 http://media.ilimnet.ru/content", $this->mediaDbFetchColumn($query));
 
-        $link = $this->getLinkByVideoId($media_id, intval($_REQUEST['series']), $forced_storage, $file_id);
-
-        if ($_REQUEST['download']){
-
-            if (preg_match('/\.(\w*)$/', $link['cmd'], $match)){
-                $extension = $match[1];
-            }
-
-            $downloads = new Downloads();
-            $link['cmd'] = $downloads->createDownloadLink('vclub', $media_id, Stb::getInstance()->id, intval($_REQUEST['series'])).(isset($extension) ? '&ext=.'.$extension : '');
-        }else{
-            $link['cmd'] = $link['cmd'] . $params;
-        }
-
-        if (Config::get('enable_tariff_plans')){
-            $user = User::getInstance(Stb::getInstance()->id);
-
-            $options = $user->getServicesByType('option');
-
-            if ($options && array_search('disable_vclub_ad', $options) !== false){
-                $disable_ad = true;
-            }
-        }
-
-        $moderator = $this->db
-            ->from('moderators')
-            ->where(array('mac' => Stb::getInstance()->mac))
-            ->use_caching()
-            ->get()
-            ->first();
-
-        if (!$disable_ad) {
-            $disable_ad = !empty($moderator) && $moderator['status'] == 1 && $moderator['disable_vclub_ad'] == 1 || !empty($_REQUEST['download']);
-        }
-
-        $vclub_ad = new VclubAdvertising();
-
-        if (!$disable_ad && empty($link['error'])){
-
-            $video = Video::getById($media_id);
-
-            $picked_ad = $vclub_ad->getOneWeightedRandom($video['category_id']);
-
-            if (!empty($picked_ad)){
-
-                $link['cmd'] = $_REQUEST['cmd'];
-
-                $link = array(
-                    array(
-                        'id'    => 0,
-                        'ad_id' => $picked_ad['id'],
-                        'ad_must_watch' => $picked_ad['must_watch'],
-                        'type'  => 'ad',
-                        'cmd'   => $picked_ad['url']
-                    ),
-                    $link
-                );
-            }
-        }
-
-        var_dump($link);
-
-        return $link;
+        return $result;
     }
 
-    public function getLinkByVideoId($video_id, $series = 0, $forced_storage = "", $file_id = 0)
+    public function getLinkByVideoId($video_id, $series = 0, $forced_storage = "")
     {
 
         $video_id = intval($video_id);
@@ -171,7 +77,7 @@ class Vod extends AjaxResponse implements \Stalker\Lib\StbApi\Vod
 
             $video = Video::getById($video_id);
 
-            if (!empty($video['rtsp_url']) && !$file_id){
+            if (!empty($video['rtsp_url'])){
                 return array(
                     'id'  => $video_id,
                     'cmd' => $this->changeSeriesOnCustomURL($video['rtsp_url'], $series)
@@ -182,7 +88,7 @@ class Vod extends AjaxResponse implements \Stalker\Lib\StbApi\Vod
         $master = new VideoMaster();
 
         try {
-            $res = $master->play($video_id, intval($series), true, $forced_storage, $file_id);
+            $res = $master->play($video_id, intval($series), true, $forced_storage);
             $res['cmd'] = $this->changeSeriesOnCustomURL($res['cmd'], $series);
         } catch (Exception $e) {
             trigger_error($e->getMessage());
@@ -191,54 +97,7 @@ class Vod extends AjaxResponse implements \Stalker\Lib\StbApi\Vod
         return $res;
     }
 
-    public function getLinkByFileId($file_id, $forced_storage = ""){
-
-        $video = Video::getVideoByFileId($file_id);
-        $video_id = $video['id'];
-        $file = Video::getFileById($file_id);
-
-        if (Config::get('enable_tariff_plans')){
-
-            $user = User::getInstance($this->stb->id);
-            $all_user_video_ids = $user->getServicesByType('video', 'single');
-
-            if ($all_user_video_ids === null){
-                $all_user_video_ids = array();
-            }
-
-            if ($all_user_video_ids != 'all'){
-                $all_user_video_ids = array_flip($all_user_video_ids);
-            }
-
-            $all_user_rented_video_ids = $user->getAllRentedVideo();
-
-            if ((array_key_exists($video_id, $all_user_video_ids) || $all_user_video_ids == 'all') && !array_key_exists($video_id, $all_user_rented_video_ids)){
-                return array(
-                    'id'         => $video_id,
-                    'error'      => 'access_denied'
-                );
-            }
-
-            if ($file['protocol'] == 'custom_url' && !empty($file['url'])) {
-                return array(
-                    'id'  => $video_id,
-                    'cmd' => $file['url']
-                );
-            }
-        }
-
-        $master = new VideoMaster();
-
-        try {
-            $res = $master->play($video_id, 0, true, $forced_storage, $file_id);
-        } catch (Exception $e) {
-            trigger_error($e->getMessage());
-        }
-
-        return $res;
-    }
-
-    public function getUrlByVideoId($video_id, $series = 0, $forced_storage = "", $file_id = 0)
+    public function getUrlByVideoId($video_id, $series = 0, $forced_storage = "")
     {
 
         $video = Video::getById($video_id);
@@ -247,46 +106,11 @@ class Vod extends AjaxResponse implements \Stalker\Lib\StbApi\Vod
             throw new Exception("Video not found");
         }
 
-        if (!empty($video['rtsp_url']) && !$file_id) {
+        if (!empty($video['rtsp_url'])) {
             return $video['rtsp_url'];
         }
 
-        $link = $this->getLinkByVideoId($video_id, $series, $forced_storage, $file_id);
-
-        if (empty($link['cmd'])) {
-            throw new Exception("Obtaining url failed");
-        }
-
-        if (!empty($link['storage_id'])){
-            $storage = Master::getStorageById($link['storage_id']);
-            if (!empty($storage)){
-                $cache = Cache::getInstance();
-                $cache->set($this->stb->id.'_playback',
-                    array('type' => 'video', 'id' => $link['id'], 'storage' => $storage['storage_name']), 0, 10);
-            }
-        }else{
-            $cache = Cache::getInstance();
-            $cache->del($this->stb->id.'_playback');
-        }
-
-        return $link['cmd'];
-    }
-
-    public function getUrlByFileId($file_id, $forced_storage = ""){
-
-        $video = Video::getVideoByFileId($file_id);
-
-        if (empty($video)) {
-            throw new Exception("Video not found");
-        }
-
-        $file = Video::getFileById($file_id);
-
-        if ($file['protocol'] == 'custom_url' && !empty($file['url'])) {
-            return $file['url'];
-        }
-
-        $link = $this->getLinkByFileId($file_id, $forced_storage);
+        $link = $this->getLinkByVideoId($video_id, $series, $forced_storage);
 
         if (empty($link['cmd'])) {
             throw new Exception("Obtaining url failed");
@@ -813,274 +637,160 @@ class Vod extends AjaxResponse implements \Stalker\Lib\StbApi\Vod
         return $data;
     }
 
-    public function getOrderedList(){
-
-        $movie_id   = isset($_REQUEST['movie_id']) ? (int) $_REQUEST['movie_id'] : 0;
-        $season_id  = isset($_REQUEST['season_id']) ? (int) $_REQUEST['season_id'] : 0;
-        $episode_id = isset($_REQUEST['episode_id']) ? (int) $_REQUEST['episode_id'] : 0;
-
-        if (!$movie_id && !$season_id && !$episode_id){
-            return $this->getMoviesList();
-        }elseif ($movie_id && !$season_id && !$episode_id){
-            $movie = Video::getById($movie_id);
-            if ($movie['is_series']){
-                return $this->getSeasonsList($movie_id);
-            }else{
-                return $this->getFilesList($movie_id);
-            }
-        }elseif ($movie_id && $season_id && !$episode_id){
-            return $this->getEpisodesList($season_id);
-        }elseif ($movie_id && $season_id && $episode_id){
-            return $this->getFilesList($movie_id, $episode_id);
-        }
-    }
-
-    public function getEpisodesList($season_id){
-
-        $offset = $this->page * self::max_page_items;
-
-        $episodes = Mysql::getInstance()->from('video_season_series')
-            ->where(array('season_id' => $season_id))
-            ->orderby('series_number');
-
-        $episodes->limit(self::max_page_items, $offset);
-
-        $episodes_nums = clone $episodes;
-        $episodes_nums = $episodes_nums->nolimit()->get()->all('series_number');
-
-        //$episodes_nums = array_map('intval', $episodes_nums);
-
-        $this->setResponseData($episodes);
-
-        for ($i = 0; $i < count($this->response['data']); $i++) {
-
-            $item = $this->response['data'][$i];
-
-            $this->response['data'][$i]['name'] = _('Episode').' '.$item['series_number'];
-
-            if ($item['series_name']){
-                $this->response['data'][$i]['name'] .= '. ' . $item['series_name'];
-            }elseif($item['series_original_name']){
-                $this->response['data'][$i]['name'] .= '. ' . $item['series_original_name'];
-            }
-
-            $this->response['data'][$i]['is_episode'] = true;
-
-            $this->response['data'][$i]['series'] = $episodes_nums;
-        }
-
-        if (!empty($_REQUEST['row'])){
-            $this->response['selected_item'] = $_REQUEST['row']+1;
-            $this->response['cur_page']      = $this->cur_page == 0 ? 1 : $this->cur_page;
-        }
-
-        return $this->response;
-    }
-
-    public function getSeasonsList($movie_id){
-
-        $offset = $this->page * self::max_page_items;
-
-        $seasons = Mysql::getInstance()->from('video_season')
-            ->where(array('video_id' => $movie_id))
-            ->orderby('season_number');
-
-        $seasons->limit(self::max_page_items, $offset);
-
-        $this->setResponseData($seasons);
-
-        for ($i = 0; $i < count($this->response['data']); $i++) {
-
-            $item = $this->response['data'][$i];
-
-            $this->response['data'][$i]['name'] = _('Season').' '.$item['season_number'];
-
-            if ($item['season_name']){
-                $this->response['data'][$i]['name'] .= '. ' . $item['season_name'];
-            }elseif($item['season_original_name']){
-                $this->response['data'][$i]['name'] .= '. ' . $item['season_original_name'];
-            }
-
-            $this->response['data'][$i]['is_season'] = true;
-        }
-
-        if (!empty($_REQUEST['row'])){
-            $this->response['selected_item'] = $_REQUEST['row']+1;
-            $this->response['cur_page']      = $this->cur_page == 0 ? 1 : $this->cur_page;
-        }
-
-        return $this->response;
-    }
-
-    public function getFilesList($movie_id, $episode_id = 0){
-
-        $offset = $this->page * self::max_page_items;
-
-        $files = Mysql::getInstance()->from('video_series_files')
-            ->where(
-                array(
-                    'video_id'  => $movie_id,
-                    'file_type' => 'video'
-                )
-            );
-
-        if ($episode_id){
-            $files->where(array('series_id' => $episode_id));
-        }
-
-        $files->limit(self::max_page_items, $offset);
-
-        $this->setResponseData($files);
-
-        if (Config::get('enable_tariff_plans')){
-            $user = User::getInstance($this->stb->id);
-            $for_rent = $user->getServicesByType('video', 'single');
-
-            if ($for_rent === null){
-                $for_rent = array();
-            }
-
-            $rented_video = $user->getAllRentedVideo();
-
-            if ($for_rent != 'all'){
-                $for_rent = array_flip($for_rent);
-            }else{
-                $for_rent = array();
-            }
-        }else{
-            $for_rent = array();
-            $rented_video = array();
-        }
-
-        for ($i = 0; $i < count($this->response['data']); $i++) {
-
-            $item = $this->response['data'][$i];
-
-            $language_codes = unserialize($item['languages']);
-
-            if (!is_array($language_codes)){
-                $language_codes = array();
-            }
-
-            $languages = array_map(function($code){
-
-                $language = Mysql::getInstance()->from('languages')->where(array('iso_639_code' => $code))->get()->first('name');
-
-                if ($language){
-                    $language = _($language);
-                }else{
-                    $language = $code;
-                }
-
-                return $language;
-
-            }, $language_codes);
-
-            $quality_map = Video::getQualityMap();
-
-            if (isset($quality_map[$item['quality']])){
-                $item['quality'] = _($quality_map[$item['quality']]['text_title']).' ('.$quality_map[$item['quality']]['num_title'].')';
-            }
-
-            if (array_key_exists($movie_id, $for_rent) || $for_rent == 'all'){
-                $this->response['data'][$i]['for_rent'] = 1;
-
-                if (array_key_exists($movie_id, $rented_video)){
-                    $this->response['data'][$i]['rent_info'] = $rented_video[$movie_id];
-                }else{
-                    $this->response['data'][$i]['open'] = 0;
-                }
-
-            }else{
-                $this->response['data'][$i]['for_rent'] = 0;
-            }
-
-            $this->response['data'][$i]['name'] = implode(', ', $languages) . ' / ' . $item['quality'];
-            $this->response['data'][$i]['is_file'] = true;
-
-            if (!empty($this->response['data'][$i]['url']) && $this->response['data'][$i]['protocol'] == 'custom' && $this->response['data'][$i]['for_rent'] == 0) {
-                $this->response['data'][$i]['cmd'] = $this->response['data'][$i]['url'];
-            } else {
-                $this->response['data'][$i]['cmd'] = '/media/file_' . $this->response['data'][$i]['id'] . '.mpg';
-            }
-        }
-
-        if (!empty($_REQUEST['row'])){
-            $this->response['selected_item'] = $_REQUEST['row']+1;
-            $this->response['cur_page']      = $this->cur_page == 0 ? 1 : $this->cur_page;
-        }
-
-        return $this->response;
-    }
-
-    public function getMoviesList()
+    public function getOrderedList()
     {
+
         $fav = $this->getFav();
 
-        $ls = Stb::getInstance()->getParam('ls');
+        // Conditions rules
+        $orderBy = array(
+            "added" => "m.updated_at DESC", // Added condition SQL
+            "name" => "m.name ASC",
+        );
 
-        if ($ls){
-            $ids_on_ls = Mysql::getInstance()->from('users')->where(array('ls' => $ls))->get()->all('id');
-        }else{
-            $ids_on_ls = array($this->stb->id);
+        // Category condition
+        $category = (array_key_exists('category', $_REQUEST) && $_REQUEST['category'] != "*") ?
+            "mgen.genre_id = ".$_REQUEST['category']: "";
+
+        // Sort by condition
+        $sortBy = (array_key_exists('sortby', $_REQUEST)) ?
+            $_REQUEST['sortby'] : 'added';
+
+        // Favorites
+        if(array_key_exists('fav', $_REQUEST) && $_REQUEST['fav'] == 1) {
+            if($fav) {
+                $favCond = implode(' OR m.movie_id = ', $fav);
+                $favCond = "(m.movie_id = ".$favCond.")";
+            } else {
+                return array(
+                            "total_items" => 0,
+                            "max_page_items" => 14,
+                            "cur_page" => 1,
+                            "data" => null,
+                        );
+            }
         }
 
-        $user = User::getInstance($this->stb->id);
-        $all_users_video_ids = $user->getServicesByType('video');
+        // Search term
+        $search = (array_key_exists('search', $_REQUEST)) ?
+            $_REQUEST['search'] : null;
 
-        $result = $this->getData();
+        // Pagination
+        $page = (array_key_exists('p', $_REQUEST)) ?
+            $_REQUEST['p'] : 1;
 
-        if (@$_REQUEST['sortby']) {
-            $sortby = $_REQUEST['sortby'];
+        $query = "SELECT m.movie_id, 
+                         m.international_name AS o_name,
+                         m.description AS description,
+                         m.name AS name,
+                         m.covers AS covers,
+                         m.year AS year,
+                         m.updated_at AS added,
+                         GROUP_CONCAT(DISTINCT ps.name SEPARATOR ', ') as director,
+                         GROUP_CONCAT(DISTINCT f.path ORDER BY f.name SEPARATOR '###') as files,
+                         count(DISTINCT f.path) as series_count
+                  FROM
+                         movies AS m".
+                         
+                  // Category
+                  (($category) ? "
+                  LEFT OUTER JOIN movies_genres AS mgen ON
+                         (m.movie_id = mgen.movie_id)" : "") ."
 
-            if ($sortby == 'name' || $sortby == 'purchased') {
-                $result = $result->orderby('video.name');
-            } elseif ($sortby == 'added') {
-                $result = $result->orderby('video.added', 'DESC');
-            } elseif ($sortby == 'top') {
-                $result->select('(count_first_0_5+count_second_0_5) as top')->orderby('top', 'DESC');
-            } elseif ($sortby == 'last_ended') {
-                $result = $result->orderby('vclub_not_ended.added', 'DESC');
-            } elseif ($sortby == 'rating') {
-                $result = $result->orderby('video.rating_kinopoisk', 'DESC');
+                  LEFT OUTER JOIN participants p ON
+                         m.movie_id = p.movie_id
+                  LEFT OUTER JOIN persones ps ON
+                         ps.person_id = p.person_id AND
+                         p.role_id = 1         /* Directors */
+
+                  INNER JOIN movies_files mf ON
+                         mf.movie_id = m.movie_id
+                  INNER JOIN files f ON
+                         f.file_id = mf.file_id
+                  WHERE
+                         m.hidden=0".
+                         
+                         (($category) ? " AND ".$category : "" ).
+                         (($search) ? " AND m.name LIKE '%".$search."%' " : "").
+                         (($favCond) ? " AND ".$favCond : "").
+
+                         "
+                  GROUP BY m.name
+                  ORDER BY ".$orderBy[$sortBy]. "
+                  LIMIT ". (($page - 1) * 14) .",14";
+
+        //return array("query", $query);
+
+        $movies = $this->mediaDbFetchAssocAll($query);
+        
+        $countQuery = ($category) ? 
+            "SELECT COUNT(*) FROM movies m, movies_genres mgen WHERE ".$category." AND m.movie_id=mgen.movie_id AND m.hidden=0". (($search) ? " AND m.name LIKE '%".$search."%'" : "") :
+            "SELECT COUNT(*) FROM movies m". (($search) ? " WHERE m.name LIKE '%".$search."%'" : "");
+        $countMovies = $this->mediaDbFetchColumn($countQuery);
+
+        foreach($movies as &$movie) {
+
+            // Wrap ID
+            $movie["id"] = $movie["movie_id"];
+            unset($movie["movie_id"]);
+
+            // Mark fav
+            if(in_array($movie["id"], $fav)) {
+                $movie["fav"] = 1;
             }
 
-        } else {
-            $result = $result->orderby('video.name');
-        }
+            // Get covers
+            $covers = explode("\n", $movie['covers']);
+            $hash = md5($covers[0]);
+            $movie["screenshot_uri"] = "http://media.ilimnet.ru/media/images/".implode("/", str_split(substr($hash, 0, 2)))."/".$hash."/image.jpg";
+            unset($movie['covers']);
 
-        if (!empty($_REQUEST['sortby']) && $_REQUEST['sortby'] == 'purchased' && Config::get('enable_tariff_plans')) {
-            $rented_video = $user->getAllRentedVideo();
-            $rented_video_ids = array_keys($rented_video);
-            $result = $result->in('video.id', $rented_video_ids);
-        }
+            // Get files
+            $filePathArr = explode("###", $movie["files"]);
 
-        if (@$_REQUEST['fav']) {
-            $result = $result->in('video.id', $fav);
-        }
+            if(count($filePathArr) == 1) {
+                $movie["cmd"] = str_replace("/mnt/media/Stream", "ffrt3 http://media.ilimnet.ru/content", $filePathArr[0]);
+            } else {
+                $movie["cmd"] = $movie["id"];
+            }
 
-        if (@$_REQUEST['hd']) {
-            $result = $result->where(array('hd' => 1));
-        }
+            $movie["series"] = (count($filePathArr) <= 1) ? false : range(1, $movie["series_count"]); //count($filePathArr));
+            unset($movie["files"]);
 
-        if (Config::get('enable_tariff_plans') && $all_users_video_ids != 'all'){
-            $result = $result->in('video.id', $all_users_video_ids);
-        }
+            // Get genres
+            $gQuery = "SELECT 
+                                GROUP_CONCAT(DISTINCT g.name SEPARATOR ' / ') AS genres_str
+                       FROM
+                                genres g, movies_genres mg
+                       WHERE
+                                mg.movie_id = ".$movie["id"]." AND
+                                g.genre_id = mg.genre_id
+                       GROUP BY mg.movie_id";
+            $movie["genres_str"] = $this->mediaDbFetchColumn($gQuery);
 
-        if (@$_REQUEST['not_ended']) {
-            $result = $result->from('vclub_not_ended')
-                ->select('vclub_not_ended.series as cur_series, vclub_not_ended.end_time as position')
-                ->where('video.id=vclub_not_ended.video_id', 'AND ', null, -1)
-                /*->where(array('vclub_not_ended.uid' => $this->stb->id));*/
-                ->in('vclub_not_ended.uid',  $ids_on_ls);
-        }
+            // Get time
+            $timeQuery = "SELECT f.metainfo FROM files f WHERE f.path='".addslashes($filePathArr[0])."'";
+            //var_dump($timeQuery);
+            $metainfo = $this->mediaDbFetchColumn($timeQuery);
+            $metainfo = unserialize($metainfo);
+            $movie["time"] = gmdate("h:i:s", $metainfo["playtime_seconds"]);
 
-        $this->setResponseData($result);
+            // Get actors
+            $actorsQuery = "SELECT GROUP_CONCAT(DISTINCT ps.name SEPARATOR ', ') AS actors FROM persones ps, participants p WHERE p.movie_id = ".$movie["id"]." AND ps.person_id = p.person_id AND (p.role_id = 3 OR p.role_id = 4) ORDER BY p.movie_id";
+            $movie["actors"] = $this->mediaDbFetchColumn($actorsQuery);
+            
+        };
 
-        return $this->getResponse('prepareMoviesList');
+        return array(
+            //"query" => preg_replace('/\s+/', ' ', $query),
+            "total_items" => $countMovies,
+            "max_page_items" => 14,
+            "cur_page" => $page,
+            "data" => $movies,
+        );
     }
 
-    public function prepareMoviesList()
+    public function prepareData()
     {
 
         $fav = $this->getFav();
@@ -1109,12 +819,16 @@ class Vod extends AjaxResponse implements \Stalker\Lib\StbApi\Vod
 
         for ($i = 0; $i < count($this->response['data']); $i++) {
 
-            $this->response['data'][$i]['is_movie'] = true;
+            if ($this->response['data'][$i]['hd']) {
+                $this->response['data'][$i]['sd'] = 0;
+            } else {
+                $this->response['data'][$i]['sd'] = 1;
+            }
 
             /// TRANSLATORS: "%2$s" - original video name, "%1$s" - video name.
             $this->response['data'][$i]['name'] = sprintf(_('video_name_format'), $this->response['data'][$i]['name'], $this->response['data'][$i]['o_name']);
 
-            unset($this->response['data'][$i]['hd']);
+            $this->response['data'][$i]['hd'] = intval($this->response['data'][$i]['hd']);
 
             if ($this->response['data'][$i]['censored']) {
                 $this->response['data'][$i]['lock'] = 1;
@@ -1151,6 +865,10 @@ class Vod extends AjaxResponse implements \Stalker\Lib\StbApi\Vod
                 $this->response['data'][$i]['cur_series'] = $not_ended[$this->response['data'][$i]['id']]['series'];
             }
 
+            //$this->response['data'][$i]['screenshot_uri'] = $this->getImgUri($this->response['data'][$i]['screenshot_id']);
+
+            //var_dump('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!', $this->response['data'][$i]['screenshots']);
+
             if ($this->response['data'][$i]['screenshots'] === null) {
                 $this->response['data'][$i]['screenshots'] = '0';
             }
@@ -1180,20 +898,6 @@ class Vod extends AjaxResponse implements \Stalker\Lib\StbApi\Vod
             }else{
                 $this->response['data'][$i]['low_quality'] = 0;
             }
-
-            $this->response['data'][$i]['has_files'] = (int) Mysql::getInstance()
-                ->from('video_series_files')
-                ->where(array(
-                    'video_id' => $this->response['data'][$i]['id']
-                ))
-                ->count()
-                ->get()
-                ->counter();
-        }
-
-        if (!empty($_REQUEST['row'])){
-            $this->response['selected_item'] = $_REQUEST['row']+1;
-            $this->response['cur_page']      = $this->cur_page == 0 ? 1 : $this->cur_page;
         }
 
         return $this->response;
@@ -1231,31 +935,20 @@ class Vod extends AjaxResponse implements \Stalker\Lib\StbApi\Vod
 
     public function getCategories()
     {
+        $categories = $this->mediaDbFetchAssocAll(
+            "SELECT genres.genre_id as id, genres.name as title FROM genres
+            RIGHT JOIN movies_genres ON (genres.genre_id = movies_genres.genre_id)
+            GROUP BY genres.genre_id ORDER BY genres.name"
+        );
 
-        $categories = $this->db
-            ->select('id, category_name as title, category_alias as alias, censored')
-            ->from("media_category")
-            ->get()
-            ->all();
-
-        array_unshift($categories, array('id' => '*', 'title' => $this->all_title, 'alias' => '*'));
-
-        $categories = array_map(function($item)
-        {
-            $item['title']    = _($item['title']);
-            $item['censored'] = (int) $item['censored'];
-            return $item;
-        }, $categories);
-
-
-        if (Config::getSafe('enable_coming_soon_section', false)){
-            $categories[] = array(
-                'id'       => 'coming_soon',
-                'title'    => _('coming soon'),
-                'alias'    => 'coming_soon',
-                'censored' => 0
-            );
-        }
+        // Adding wildcard category
+        array_unshift($categories,
+            array(
+                "id" => "*",
+                "title" => "ВСЕ",
+                "alias" => "*"
+            )
+        );
 
         return $categories;
     }
@@ -1295,25 +988,6 @@ class Vod extends AjaxResponse implements \Stalker\Lib\StbApi\Vod
 
     public function getYears()
     {
-
-        $where = array('year>' => '1900');
-
-        if (@$_REQUEST['category'] && @$_REQUEST['category'] !== '*') {
-            $where['category_id'] = $_REQUEST['category'];
-        }
-
-        $years = $this->db
-            ->select('year as id, year as title')
-            ->from('video')
-            ->where($where)
-            ->groupby('year')
-            ->orderby('year')
-            ->get()
-            ->all();
-
-        array_unshift($years, array('id' => '*', 'title' => '*'));
-
-        return $years;
     }
 
     public function getAbc()
@@ -1333,14 +1007,6 @@ class Vod extends AjaxResponse implements \Stalker\Lib\StbApi\Vod
 
     public function getGenresStrByItem($item)
     {
-
-        return implode(', ', array_map(function($item)
-        {
-            $item = _($item);
-            $fc = mb_strtoupper(mb_substr($item, 0, 1, 'UTF-8'), 'UTF-8');
-            $item = $fc.mb_substr($item, 1, mb_strlen($item), 'UTF-8');
-            return $item;
-        }, $this->db->from('cat_genre')->in('id', array($item['cat_genre_id_1'], $item['cat_genre_id_2'], $item['cat_genre_id_3'], $item['cat_genre_id_4']))->get()->all('title')));
     }
 
     public function setClaim()
@@ -1361,6 +1027,57 @@ class Vod extends AjaxResponse implements \Stalker\Lib\StbApi\Vod
         }
         return $url;
     }
+
+
+    /**
+     * MEDIADB FUNCTIONS
+     */
+
+    // Connect to database
+    private function getMediaDb()
+    {
+        if (!$this->media_db)
+        {
+            try
+            {
+                $this->media_db = new PDO("mysql:host=".Config::get("mediadb_host").";dbname=".Config::get("mediadb_name"), Config::get("mediadb_user"), Config::get("mediadb_pass"));
+                $this->media_db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                $this->media_db->exec('SET NAMES utf8');
+            }
+            catch (PDOException $e)
+            {}
+        }
+        return $this->media_db;
+    }
+
+    private function mediaDbFetchAssocAll($query)
+    {
+        $mediadb = $this->getMediaDb();
+
+        try
+        {
+            $result = $mediadb->query($query)->fetchAll(\PDO::FETCH_ASSOC);
+        }
+        catch (PDOException $e)
+        { }
+
+        return $result;
+    }
+    
+    private function mediaDbFetchColumn($query)
+    {
+        $mediadb = $this->getMediaDb();
+
+        try
+        {
+            $result = $mediadb->query($query)->fetch(\PDO::FETCH_COLUMN);
+        }
+        catch (PDOException $e)
+        { }
+
+        return $result;
+    }
+
 }
 
 class VodLinkException extends Exception

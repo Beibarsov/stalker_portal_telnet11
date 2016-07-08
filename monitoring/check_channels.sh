@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Use login and password from the configuration file. (api_auth_login and api_auth_password in server/custom.ini)
-API_URL=http://login:password@localhost/stalker_portal/api/monitoring_links/
+API_URL=http://login:password@172.31.0.2/stalker_portal/api/monitoring_links/
 
 #type channel for scaning; first argument from console or or manualy edit; posible value - "itv" or "radio"
 MONITORING_TYPE="$1"

@@ -15,6 +15,16 @@ class RadioController extends \Controller\BaseStalkerController {
 
     public function __construct(Application $app) {
         parent::__construct($app, __CLASS__);
+        $this->allStatus = array(
+            array('id' => 1, 'title' => $this->setLocalization('Unpublished')),
+            array('id' => 2, 'title' => $this->setLocalization('Published'))
+        );
+
+        $this->app['allMonitoringStatus'] = array(
+            array('id' => 1, 'title' => $this->setLocalization('monitoring off')),
+            array('id' => 2, 'title' => $this->setLocalization('errors occurred')),
+            array('id' => 3, 'title' => $this->setLocalization('no errors'))
+        );
     }
 
     // ------------------- action method ---------------------------------------
@@ -28,16 +38,12 @@ class RadioController extends \Controller\BaseStalkerController {
         $this->checkDropdownAttribute($attribute);
         $this->app['dropdownAttribute'] = $attribute;
 
-        $this->app['allMonitoringStatus'] = array(
-            array('id' => 1, 'title' => $this->setLocalization('monitoring off')),
-            array('id' => 2, 'title' => $this->setLocalization('errors occurred')),
-            array('id' => 3, 'title' => $this->setLocalization('no errors'))
-        );
+        $list = $this->radio_list_json();
 
-        $this->app['allStatus'] = array(
-            array('id' => 1, 'title' => $this->setLocalization('Unpublished')),
-            array('id' => 2, 'title' => $this->setLocalization('Published'))
-        );
+        $this->app['allRadio'] = $list['data'];
+        $this->app['allStatus'] = $this->allStatus;
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
 
         return $this->app['twig']->render($this->getTemplateName(__METHOD__));
     }
@@ -123,10 +129,6 @@ class RadioController extends \Controller\BaseStalkerController {
         $filter = $this->getRadioFilters();
 
         $query_param['where'] = array_merge($query_param['where'], $filter);
-
-        if (!empty($query_param['like']) && array_key_exists('volume_correction', $query_param['like'])) {
-            $query_param['like']['volume_correction'] = '%' . ((int) trim($query_param['like']['volume_correction'], '%')) / 5 . '%';
-        }
 
         $response['recordsTotal'] = $this->db->getTotalRowsRadioList();
         $response["recordsFiltered"] = $this->db->getTotalRowsRadioList($query_param['where'], $query_param['like']);

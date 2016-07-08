@@ -211,7 +211,7 @@ class AppsManager
 
         umask(0);
         if (!is_dir($path)){
-            mkdir($path, 0777, true);
+            mkdir($path, 0755, true);
         }
 
         $archive = new ZipArchive();
@@ -251,11 +251,7 @@ class AppsManager
                 $update_data['description'] = $info['description'];
             }
 
-            if (!empty($info['config']) && isset($info['config']['type'])){
-                $update_data['config'] = json_encode($info['config']);
-            }
-
-            if (!empty($info['config']['icons']) && is_string($info['config']['icons'])){
+            if (!empty($info['config']['icons'])){
                 $update_data['icons'] = $info['config']['icons'];
             }else{
                 $update_data['icons'] = 'icons';
@@ -356,7 +352,7 @@ class AppsManager
 
         umask(0);
         if (!is_dir($path)){
-            mkdir($path, 0777, true);
+            mkdir($path, 0755, true);
         }
 
         $archive = new ZipArchive();
@@ -387,11 +383,7 @@ class AppsManager
                 $update_data['description'] = $info['description'];
             }
 
-            if (!empty($info['config']) && isset($info['config']['type'])){
-                $update_data['config'] = json_encode($info['config']);
-            }
-
-            if (!empty($info['config']['icons']) && is_string($info['config']['icons'])){
+            if (!empty($info['config']['icons'])){
                 $update_data['icons'] = $info['config']['icons'];
             }else{
                 $update_data['icons'] = 'icons';

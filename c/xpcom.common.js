@@ -430,8 +430,8 @@ function common_xpcom(){
                         _debug('redirect to the new launcher');
                         window.stop();
                         document.body.hide();
-                        _debug('../new/?config=' + encodeURIComponent('../../server/api/launcher_profile.php?uid=' + this.user['id'] + '&language='+this.stb_lang));
-                        window.location = '../new/?config=' + encodeURIComponent('../../server/api/launcher_profile.php?uid=' + this.user['id'] + '&language='+this.stb_lang);
+                        _debug('../new/launcher/?profile=' + encodeURIComponent('../../server/api/launcher_profile.php?uid=' + this.user['id'] + '&language='+this.stb_lang));
+                        window.location = '../new/launcher/?profile=' + encodeURIComponent('../../server/api/launcher_profile.php?uid=' + this.user['id'] + '&language='+this.stb_lang);
                         return;
                     }else{
                         result.template = 'default';
@@ -1094,8 +1094,8 @@ function common_xpcom(){
                 _debug('redirect to the new launcher');
                 window.stop();
                 document.body.hide();
-                _debug('../new/?config=' + encodeURIComponent('../../server/api/launcher_profile.php?uid=' + this.user['id'] + '&language='+this.stb_lang));
-                window.location = '../new/?config=' + encodeURIComponent('../../server/api/launcher_profile.php?uid=' + this.user['id'] + '&language='+this.stb_lang);
+                _debug('../new/launcher/?profile=' + encodeURIComponent('../../server/api/launcher_profile.php?uid=' + this.user['id'] + '&language='+this.stb_lang));
+                window.location = '../new/launcher/?profile=' + encodeURIComponent('../../server/api/launcher_profile.php?uid=' + this.user['id'] + '&language='+this.stb_lang);
                 return;
             }
 
@@ -1129,9 +1129,7 @@ function common_xpcom(){
 
                 this.user.fav_itv_on = parseInt(this.user.fav_itv_on, 10);
 
-                this.user['aspect']      = parseInt(this.user['aspect'],    10);
-                stb.player.ch_aspect_idx = this.aspect_array.getIdxByVal('mode', this.user['aspect']);
-
+                this.user['aspect']    = stb.player.ch_aspect_idx = parseInt(this.user['aspect'],    10);
                 this.user['audio_out'] = parseInt(this.user['audio_out'], 10);
 
                 stb.user['playback_limit'] = parseInt(this.user['playback_limit'], 10);

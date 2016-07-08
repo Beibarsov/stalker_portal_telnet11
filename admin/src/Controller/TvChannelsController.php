@@ -7,12 +7,12 @@ use Symfony\Component\HttpFoundation\Request as Request;
 use Symfony\Component\HttpFoundation\Response as Response;
 use Symfony\Component\Validator\Constraints as Assert;
 use Symfony\Component\Form\FormFactoryInterface as FormFactoryInterface;
-use Symfony\Component\Form\FormError as FormError;
 use Stalker\Lib\Core\Config;
 use Imagine\Image\Box;
 
 class TvChannelsController extends \Controller\BaseStalkerController {
 
+    private $logoHost;
     private $logoDir;
     private $broadcasting_keys = array(
         'cmd' => array(''),
@@ -22,7 +22,6 @@ class TvChannelsController extends \Controller\BaseStalkerController {
         'wowza_tmp_link' => array(''),
         'nginx_secure_link' => array(''),
         'flussonic_tmp_link' => array(''),
-        'xtream_codes_support' => array(''),
         'enable_monitoring' => array(FALSE),
         'monitoring_status' => array(FALSE),
         'enable_balancer_monitoring' => array(''),
@@ -40,8 +39,26 @@ class TvChannelsController extends \Controller\BaseStalkerController {
     public function __construct(Application $app) {
 
         parent::__construct($app, __CLASS__);
+        
+        $this->logoHost = $this->baseHost . Config::getSafe('portal_url', '/stalker_portal/') . "misc/logos";
         $this->logoDir = str_replace('/admin', '', $this->baseDir) . "/misc/logos";
+        $this->app['error_local'] = array();
         $this->app['baseHost'] = $this->baseHost;
+        $this->app['allArchive'] = array(
+            array('id' => 1, 'title' => $this->setLocalization('Yes')),
+            array('id' => 2, 'title' => $this->setLocalization('No'))
+        );
+        $this->app['allStatus'] = array(
+            array('id' => 1, 'title' => $this->setLocalization('Published')),
+            array('id' => 2, 'title' => $this->setLocalization('Unpublished'))
+        );
+
+        $this->app['allMonitoringStatus'] = array(
+            array('id' => 1, 'title' => $this->setLocalization('monitoring off')),
+            array('id' => 2, 'title' => $this->setLocalization('errors occurred')),
+            array('id' => 3, 'title' => $this->setLocalization('no errors')),
+            array('id' => 4, 'title' => $this->setLocalization('there are some problems'))
+        );
     }
 
     // ------------------- action method ---------------------------------------
@@ -64,24 +81,11 @@ class TvChannelsController extends \Controller\BaseStalkerController {
             return $no_auth;
         }
 
+        $allChannels = $this->iptv_list_json();
         $this->app['allChannels'] = $this->db->getAllFromTable('itv');
+        $this->app['recordsFiltered'] = $allChannels['recordsFiltered'];
+        $this->app['totalRecords'] = $allChannels['recordsTotal'];
         $this->app['allGenres'] = $this->getAllGenres();
-        $this->app['allArchive'] = array(
-            array('id' => 1, 'title' => $this->setLocalization('Yes')),
-            array('id' => 2, 'title' => $this->setLocalization('No'))
-        );
-
-        $this->app['allStatus'] = array(
-            array('id' => 1, 'title' => $this->setLocalization('Published')),
-            array('id' => 2, 'title' => $this->setLocalization('Unpublished'))
-        );
-
-        $this->app['allMonitoringStatus'] = array(
-            array('id' => 1, 'title' => $this->setLocalization('monitoring off')),
-            array('id' => 2, 'title' => $this->setLocalization('errors occurred')),
-            array('id' => 3, 'title' => $this->setLocalization('no errors')),
-            array('id' => 4, 'title' => $this->setLocalization('there are some problems'))
-        );
 
         $attribute = $this->getIptvListDropdownAttribute();
         $this->checkDropdownAttribute($attribute);
@@ -130,8 +134,6 @@ class TvChannelsController extends \Controller\BaseStalkerController {
             $this->app['request']->getSession()->remove('channel_error');
         }
 
-        $this->app['enable_tariff_plans'] = Config::getSafe('enable_tariff_plans', false);
-
         $this->app['allGenres'] = $this->getAllGenres();
         $this->app['streamServers'] = $this->db->getAllStreamServer();
         $this->app['channelEdit'] = FALSE;
@@ -162,9 +164,6 @@ class TvChannelsController extends \Controller\BaseStalkerController {
             $this->app['request']->getSession()->set('channel_error', TRUE);
             return $this->app->redirect('add-channel');
         }
-
-        $this->app['enable_tariff_plans'] = Config::getSafe('enable_tariff_plans', false);
-
         $this->oneChannel = array_merge($this->oneChannel, $this->getStorages($id));
         $this->oneChannel['pvr_storage_names'] = array_keys(\RemotePvr::getStoragesForChannel($id));
         settype($this->oneChannel['enable_tv_archive'], 'boolean');
@@ -178,6 +177,8 @@ class TvChannelsController extends \Controller\BaseStalkerController {
         $this->oneChannel['logo'] = $this->getLogoUriById(FALSE, $this->oneChannel);
         $this->setChannelLinks();
         $this->app['streamServers'] = $this->streamServers;
+
+        $this->app['error_local'] = array();
 
         $form = $this->buildForm($this->oneChannel);
 
@@ -203,6 +204,12 @@ class TvChannelsController extends \Controller\BaseStalkerController {
         $this->checkDropdownAttribute($attribute);
         $this->app['dropdownAttribute'] = $attribute;
 
+        $list = $this->epg_list_json();
+
+        $this->app['allData'] = $list['data'];
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
+
         $this->app['allLanguages'] = $this->getLanguageCodesEN();
 
         return $this->app['twig']->render($this->getTemplateName(__METHOD__));
@@ -213,9 +220,12 @@ class TvChannelsController extends \Controller\BaseStalkerController {
             return $no_auth;
         }
 
-        $attribute = $this->getGenresDropdownAttribute();
-        $this->checkDropdownAttribute($attribute);
-        $this->app['dropdownAttribute'] = $attribute;
+        $this->app['dropdownAttribute'] = $this->getGenresDropdownAttribute();
+        $list = $this->tv_genres_list_json();
+
+        $this->app['allData'] = $list['data'];
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
 
         return $this->app['twig']->render($this->getTemplateName(__METHOD__));
     }
@@ -271,22 +281,13 @@ class TvChannelsController extends \Controller\BaseStalkerController {
             }
         }
 
-        $limit_off = !empty($filter['enable_monitoring']);
-        if (!empty($query_param['order']) && array_key_exists('itv.monitoring_status', $query_param['order'])) {
-            $order = $query_param['order']['itv.monitoring_status'];
-            $query_param['order'] = array(
-                'itv.enable_monitoring' => $order,
-                'itv.monitoring_status' => $order
-            );
-        }
-
         if (!isset($query_param['like'])) {
             $query_param['like'] = array();
         }
 
         $response['recordsTotal'] = $this->db->getTotalRowsAllChannels();
         $response["recordsFiltered"] = $this->db->getTotalRowsAllChannels($query_param['where'], $query_param['like']);
-        if (empty($query_param['limit']['limit']) && $limit_off) {
+        if (empty($query_param['limit']['limit'])) {
             $query_param['limit']['limit'] = 50;
         } elseif ($query_param['limit']['limit'] == -1) {
             $query_param['limit']['limit'] = FALSE;
@@ -318,12 +319,6 @@ class TvChannelsController extends \Controller\BaseStalkerController {
                 }
             }
         }
-
-        if ($limit_off) {
-            $count = count($response["data"]);
-            $response["recordsFiltered"] = $count;// < 50 ? $count: $response["recordsFiltered"];
-        }
-
         $response["draw"] = !empty($this->data['draw']) ? $this->data['draw'] : 1;
         $error = "";
 
@@ -438,27 +433,15 @@ class TvChannelsController extends \Controller\BaseStalkerController {
                 try{
                     $uploaded = $this->request->files->get($f_key)->getPathname();
                     $ext = end(explode('.', $tmp['name']));
-                    if (!is_dir($img_path."/original")) {
-                        if (!mkdir($img_path."/original", 0777, TRUE)){
-                            throw new \Exception(sprintf(_('Cannot create directory %s'), $img_path."/original"));
-                        }
-                    }
                     $this->app['imagine']->open($uploaded)->save($img_path."/original/$upload_id.$ext");
                     foreach($this->logoResolutions as $res => $param){
-                        if (!is_dir($img_path."/$res")) {
-                            if (!mkdir($img_path."/$res", 0777, TRUE)){
-                                throw new \Exception(sprintf(_('Cannot create directory %s'), $img_path."/$res"));
-                            }
-                        }
                         $this->app['imagine']->open($uploaded)->resize(new Box($param['width'], $param['height']))->save($img_path."/$res/$upload_id.$ext");
                         chmod($img_path."/$res/$upload_id.$ext", 0644);
                     }
                     $error = '';
-                    $logoHost = $this->baseHost . Config::getSafe('portal_url', '/stalker_portal/') . "misc/logos";
-                    $response = $this->generateAjaxResponse(array('pic' => $logoHost . "/320/$upload_id.$ext"), $error);
+                    $response = $this->generateAjaxResponse(array('pic' => $this->logoHost . "/320/$upload_id.$ext"), $error);
                 } catch (\ImagickException $e) {
-                    $error = sprintf(_('Error save file %s'), $tmp['name']);
-                    $response['msg'] = $e->getMessage() . '. ' . $error;
+                    $error = sprintf(_('Error save file %s'), $tmp['tmp_name']);
                 }
             }
         }
@@ -907,7 +890,6 @@ class TvChannelsController extends \Controller\BaseStalkerController {
 
         $response['data'] = array_map(function($row) use ($self){
             $row['localized_title'] = $self->setLocalization($row['title']);
-            $row['censored'] = (int) $row['censored'];
             $row['RowOrder'] = "dTRow_" . $row['id'];
             return $row;
         }, $this->db->getTvGenresList($query_param));
@@ -937,7 +919,7 @@ class TvChannelsController extends \Controller\BaseStalkerController {
         $error = $this->setLocalization('Failed');
         $check = $this->db->getTvGenresList(array('where' => array('title' => $this->postData['title']), 'order' => array('title' => 'ASC')));
         if (empty($check)) {
-            if ($this->db->insertTvGenres(array('title' => $this->postData['title'], 'censored' => !empty($this->postData['censored'])))) {
+            if ($this->db->insertTvGenres(array('title' => $this->postData['title']))) {
                 $error = '';
             } else {
                 $data['msg'] = $error = ' ' . $this->setLocalization('Nothing to do');
@@ -970,7 +952,7 @@ class TvChannelsController extends \Controller\BaseStalkerController {
             'like' => array()
         ));
         if (empty($check)) {
-            $result = $this->db->updateTvGenres(array('title' => $this->postData['title'], 'censored' => !empty($this->postData['censored'])), array('id' => $this->postData['id']));
+            $result = $this->db->updateTvGenres(array('title' => $this->postData['title']), array('id' => $this->postData['id']));
             if ($result) {
                 $error = '';
                 $data['id'] = $this->postData['id'];
@@ -1332,15 +1314,6 @@ class TvChannelsController extends \Controller\BaseStalkerController {
            $def_name = "";//"$def_name $def_number";
         }
 
-        if (extension_loaded('mcrypt') || extension_loaded('mcrypt.so')){
-            $this->app['mcrypt_enabled'] = TRUE;
-        } else {
-            $this->app['mcrypt_enabled'] = FALSE;
-            if (array_key_exists('xtream_codes_support', $data) && !empty($data['xtream_codes_support'])) {
-                $data['xtream_codes_support'] = array_fill(0, count($data['xtream_codes_support']), 0);
-            }
-        }
-
         $form = $builder->createBuilder('form', $data)
                 ->add('id', 'hidden')
                 ->add('number', 'text', array(
@@ -1400,7 +1373,6 @@ class TvChannelsController extends \Controller\BaseStalkerController {
                 ->add('wowza_tmp_link', 'collection', $this->getDefaultOptions())
                 ->add('nginx_secure_link', 'collection', $this->getDefaultOptions())
                 ->add('flussonic_tmp_link', 'collection', $this->getDefaultOptions())
-                ->add('xtream_codes_support', 'collection', $this->getDefaultOptions())
                 ->add('enable_monitoring', 'collection', $this->getDefaultOptions('checkbox'))
                 ->add('monitoring_status', 'collection', $this->getDefaultOptions())
                 ->add('enable_balancer_monitoring', 'collection', $this->getDefaultOptions())
@@ -1484,7 +1456,6 @@ class TvChannelsController extends \Controller\BaseStalkerController {
                 'use_http_tmp_link' => !empty($data['use_http_tmp_link']) && array_key_exists($key, $data['use_http_tmp_link']) ? (int) $data['use_http_tmp_link'][$key] : 0,
                 'wowza_tmp_link' => !empty($data['wowza_tmp_link']) && array_key_exists($key, $data['wowza_tmp_link']) ? (int) $data['wowza_tmp_link'][$key] : 0,
                 'flussonic_tmp_link' => !empty($data['flussonic_tmp_link']) && array_key_exists($key, $data['flussonic_tmp_link']) ? (int) $data['flussonic_tmp_link'][$key] : 0,
-                'xtream_codes_support' => !empty($data['xtream_codes_support']) && array_key_exists($key, $data['xtream_codes_support']) ? (int) $data['xtream_codes_support'][$key] : 0,
                 'nginx_secure_link' => !empty($data['nginx_secure_link']) && array_key_exists($key, $data['nginx_secure_link']) ? (int) $data['nginx_secure_link'][$key] : 0,
                 'user_agent_filter' => array_key_exists($key, $data['user_agent_filter']) ? $data['user_agent_filter'][$key] : '',
                 'monitoring_url' => array_key_exists($key, $data['monitoring_url']) ? $data['monitoring_url'][$key] : '',
@@ -1510,19 +1481,16 @@ class TvChannelsController extends \Controller\BaseStalkerController {
                 $is_repeating_number = !(($this->oneChannel['number'] != $data['number']) xor ( (bool) count($this->db->getFieldFirstVal('number', $data['number']))));
                 $operation = 'updateITVChannel';
             }
-            $this->dataPrepare($data);
 
             if ((!empty($data['allow_pvr']) || !empty($data['enable_tv_archive'])) && empty($data['mc_cmd'])) {
                 $error_local = array();
                 $error_local['mc_cmd'] = $this->setLocalization('This field cannot be empty if enabled TV-archive or nPVR');
                 $this->app['error_local'] = $error_local;
                 return FALSE;
-            } elseif(array_key_exists('xtream_codes_support', $data) && array_sum($data['xtream_codes_support']) && empty($this->app['mcrypt_enabled'])) {
-                $form->addError(new FormError($this->setLocalization('For enabling Xtream-Codes Support you need enable mcrypt php-extension')));
-                return FALSE;
             }
 
             if ($form->isValid()) {
+                $this->dataPrepare($data);
                 if (empty($data['cmd'])) {
                     $error_local['cmd'] = $this->setLocalization('Requires at least one link of broadcast');
                     $this->app['error_local'] = $error_local;
@@ -1841,8 +1809,185 @@ class TvChannelsController extends \Controller\BaseStalkerController {
             array('name'=>'number',         'title'=>$this->setLocalization('Order'),           'checked' => TRUE),
             array('name'=>'title',          'title'=>$this->setLocalization('Title'),           'checked' => TRUE),
             array('name'=>'localized_title','title'=>$this->setLocalization('Localized title'), 'checked' => TRUE),
-            array('name'=>'censored',       'title'=>$this->setLocalization('Age restriction'), 'checked' => TRUE),
             array('name'=>'operations',     'title'=>$this->setLocalization('Operation'),       'checked' => TRUE)
+        );
+    }
+
+    private function getLanguageCodesEN() {
+        return array(
+            'aa' => $this->setLocalization('Afar'),
+            'ab' => $this->setLocalization('Abkhazian'),
+            'af' => $this->setLocalization('Afrikaans'),
+            'ak' => $this->setLocalization('Akan'),
+            'am' => $this->setLocalization('Amharic'),
+            'ar' => $this->setLocalization('Arabic'),
+            'as' => $this->setLocalization('Assamese'),
+            'av' => $this->setLocalization('Avaric'),
+            'ae' => $this->setLocalization('Avestan'),
+            'ay' => $this->setLocalization('Aymara'),
+            'az' => $this->setLocalization('Azerbaijani'),
+            'ba' => $this->setLocalization('Bashkir'),
+            'bm' => $this->setLocalization('Bambara'),
+            'eu' => $this->setLocalization('Basque'),
+            'be' => $this->setLocalization('Belarusian'),
+            'bn' => $this->setLocalization('Bengali'),
+            'bi' => $this->setLocalization('Bislama'),
+            'bo' => $this->setLocalization('Tibetan'),
+            'bs' => $this->setLocalization('Bosnian'),
+            'br' => $this->setLocalization('Breton'),
+            'bg' => $this->setLocalization('Bulgarian'),
+            'ca' => $this->setLocalization('Catalan'),
+            'cs' => $this->setLocalization('Czech'),
+            'ch' => $this->setLocalization('Chamorro'),
+            'ce' => $this->setLocalization('Chechen'),
+            'cu' => $this->setLocalization('Church Slavic'),
+            'cv' => $this->setLocalization('Chuvash'),
+            'kw' => $this->setLocalization('Cornish'),
+            'co' => $this->setLocalization('Corsican'),
+            'cy' => $this->setLocalization('Welsh'),
+            'da' => $this->setLocalization('Danish'),
+            'de' => $this->setLocalization('German'),
+            'dv' => $this->setLocalization('Divehi'),
+            'dz' => $this->setLocalization('Dzongkha'),
+            'el' => $this->setLocalization('Greek'),
+            'en' => $this->setLocalization('English'),
+            'eo' => $this->setLocalization('Esperanto'),
+            'et' => $this->setLocalization('Estonian'),
+            'ee' => $this->setLocalization('Ewe'),
+            'fo' => $this->setLocalization('Faroese'),
+            'fa' => $this->setLocalization('Persian'),
+            'fj' => $this->setLocalization('Fijian'),
+            'fi' => $this->setLocalization('Finnish'),
+            'fr' => $this->setLocalization('French'),
+            'fy' => $this->setLocalization('Western Frisian'),
+            'ff' => $this->setLocalization('Fulah'),
+            'ka' => $this->setLocalization('Georgian'),
+            'gd' => $this->setLocalization('Gaelic'),
+            'ga' => $this->setLocalization('Irish'),
+            'gl' => $this->setLocalization('Galician'),
+            'gv' => $this->setLocalization('Manx'),
+            'gn' => $this->setLocalization('Guarani'),
+            'gu' => $this->setLocalization('Gujarati'),
+            'ha' => $this->setLocalization('Hausa'),
+            'he' => $this->setLocalization('Hebrew'),
+            'hz' => $this->setLocalization('Herero'),
+            'hi' => $this->setLocalization('Hindi'),
+            'ho' => $this->setLocalization('Hiri Motu'),
+            'hr' => $this->setLocalization('Croatian'),
+            'hu' => $this->setLocalization('Hungarian'),
+            'hy' => $this->setLocalization('Armenian'),
+            'ig' => $this->setLocalization('Igbo'),
+            'iu' => $this->setLocalization('Inuktitut'),
+            'ie' => $this->setLocalization('Interlingue'),
+            'ia' => $this->setLocalization('Interlingua'),
+            'id' => $this->setLocalization('Indonesian'),
+            'ik' => $this->setLocalization('Inupiaq'),
+            'is' => $this->setLocalization('Icelandic'),
+            'it' => $this->setLocalization('Italian'),
+            'jv' => $this->setLocalization('Javanese'),
+            'ja' => $this->setLocalization('Japanese'),
+            'kl' => $this->setLocalization('Kalaallisut'),
+            'kn' => $this->setLocalization('Kannada'),
+            'ks' => $this->setLocalization('Kashmiri'),
+            'kr' => $this->setLocalization('Kanuri'),
+            'kk' => $this->setLocalization('Kazakh'),
+            'km' => $this->setLocalization('Central Khmer'),
+            'ki' => $this->setLocalization('Kikuyu'),
+            'rw' => $this->setLocalization('Kinyarwanda'),
+            'ky' => $this->setLocalization('Kirghiz'),
+            'kv' => $this->setLocalization('Komi'),
+            'kg' => $this->setLocalization('Kongo'),
+            'ko' => $this->setLocalization('Korean'),
+            'kj' => $this->setLocalization('Kuanyama'),
+            'ku' => $this->setLocalization('Kurdish'),
+            'lo' => $this->setLocalization('Lao'),
+            'la' => $this->setLocalization('Latin'),
+            'lv' => $this->setLocalization('Latvian'),
+            'ln' => $this->setLocalization('Lingala'),
+            'lt' => $this->setLocalization('Lithuanian'),
+            'lb' => $this->setLocalization('Luxembourgish'),
+            'lu' => $this->setLocalization('Luba-Katanga'),
+            'lg' => $this->setLocalization('Ganda'),
+            'mk' => $this->setLocalization('Macedonian'),
+            'mh' => $this->setLocalization('Marshallese'),
+            'ml' => $this->setLocalization('Malayalam'),
+            'mi' => $this->setLocalization('Maori'),
+            'mr' => $this->setLocalization('Marathi'),
+            'mg' => $this->setLocalization('Malagasy'),
+            'mt' => $this->setLocalization('Maltese'),
+            'mn' => $this->setLocalization('Mongolian'),
+            'ms' => $this->setLocalization('Malay'),
+            'my' => $this->setLocalization('Burmese'),
+            'na' => $this->setLocalization('Nauru'),
+            'nv' => $this->setLocalization('Navajo'),
+            'nr' => $this->setLocalization('Ndebele'),
+            'nd' => $this->setLocalization('North Ndebele'),
+            'ng' => $this->setLocalization('Ndonga'),
+            'ne' => $this->setLocalization('Nepali'),
+            'nl' => $this->setLocalization('Dutch'),
+            'no' => $this->setLocalization('Norwegian'),
+            'ny' => $this->setLocalization('Chichewa'),
+            'oc' => $this->setLocalization('Occitan'),
+            'oj' => $this->setLocalization('Ojibwa'),
+            'or' => $this->setLocalization('Oriya'),
+            'om' => $this->setLocalization('Oromo'),
+            'os' => $this->setLocalization('Ossetian'),
+            'pa' => $this->setLocalization('Panjabi'),
+            'pi' => $this->setLocalization('Pali'),
+            'pl' => $this->setLocalization('Polish'),
+            'pt' => $this->setLocalization('Portuguese'),
+            'ps' => $this->setLocalization('Pushto'),
+            'qu' => $this->setLocalization('Quechua'),
+            'rm' => $this->setLocalization('Romansh'),
+            'ro' => $this->setLocalization('Romanian'),
+            'rn' => $this->setLocalization('Rundi'),
+            'ru' => $this->setLocalization('Russian'),
+            'sg' => $this->setLocalization('Sango'),
+            'sa' => $this->setLocalization('Sanskrit'),
+            'si' => $this->setLocalization('Sinhala'),
+            'sk' => $this->setLocalization('Slovak'),
+            'sl' => $this->setLocalization('Slovenian'),
+            'sm' => $this->setLocalization('Samoan'),
+            'sn' => $this->setLocalization('Shona'),
+            'sd' => $this->setLocalization('Sindhi'),
+            'so' => $this->setLocalization('Somali'),
+            'st' => $this->setLocalization('Southern Sotho'),
+            'es' => $this->setLocalization('Spanish'),
+            'sq' => $this->setLocalization('Albanian'),
+            'sc' => $this->setLocalization('Sardinian'),
+            'sr' => $this->setLocalization('Serbian'),
+            'ss' => $this->setLocalization('Swati'),
+            'su' => $this->setLocalization('Sundanese'),
+            'sw' => $this->setLocalization('Swahili'),
+            'sv' => $this->setLocalization('Swedish'),
+            'ty' => $this->setLocalization('Tahitian'),
+            'ta' => $this->setLocalization('Tamil'),
+            'tt' => $this->setLocalization('Tatar'),
+            'te' => $this->setLocalization('Telugu'),
+            'tg' => $this->setLocalization('Tajik'),
+            'tl' => $this->setLocalization('Tagalog'),
+            'th' => $this->setLocalization('Thai'),
+            'ti' => $this->setLocalization('Tigrinya'),
+            'to' => $this->setLocalization('Tonga'),
+            'tn' => $this->setLocalization('Tswana'),
+            'ts' => $this->setLocalization('Tsonga'),
+            'tk' => $this->setLocalization('Turkmen'),
+            'tr' => $this->setLocalization('Turkish'),
+            'tw' => $this->setLocalization('Twi'),
+            'ug' => $this->setLocalization('Uighur'),
+            'uk' => $this->setLocalization('Ukrainian'),
+            'ur' => $this->setLocalization('Urdu'),
+            'uz' => $this->setLocalization('Uzbek'),
+            've' => $this->setLocalization('Venda'),
+            'vi' => $this->setLocalization('Vietnamese'),
+            'vo' => $this->setLocalization('Volap'),
+            'wo' => $this->setLocalization('Wolof'),
+            'xh' => $this->setLocalization('Xhosa'),
+            'yi' => $this->setLocalization('Yiddish'),
+            'yo' => $this->setLocalization('Yoruba'),
+            'za' => $this->setLocalization('Zhuang'),
+            'zh' => $this->setLocalization('Chinese'),
+            'zu' => $this->setLocalization('Zulu')
         );
     }
 

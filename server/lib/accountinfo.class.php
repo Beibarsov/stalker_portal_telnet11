@@ -50,8 +50,21 @@ class AccountInfo implements \Stalker\Lib\StbApi\AccountInfo
             }
         }
 
-        if (Config::get('enable_tariff_plans')){
-            $info['tariff_plan'] = $user->getTariffPlanName();
+        //if (Config::get('enable_tariff_plans')){
+            //$info['tariff_plan'] = $user->getTariffPlanName();
+        //}
+
+        // Get ballance
+        if($info['ls']) {
+
+                   $cLine = "/netup/utm5/bin/utm5_urfaclient -a get_accountinfo -account_id ".$info['ls'];
+               exec($cLine, $result);
+        
+               foreach ($result as $line) {
+                       preg_match('~\<double name\=\"balance" value\=\"(.*)\"/>~', $line, $balance_preg);
+                       if(count($balance_preg) > 1) $info['account_balance'] = floor($balance_preg[1] * 100) / 100;
+               }
+
         }
 
         return $info;

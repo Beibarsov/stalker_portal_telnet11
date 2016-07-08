@@ -53,51 +53,44 @@
     </tr>
 [% } %]
 </script>
-<script type="text/javascript" defer="defer">
+<script defer="">
     function loadFileUploadScripts(callbackFileUpload){
+        $.each([
+            "//ajax.googleapis.com/ajax/libs/jqueryui/1.11.1/themes/vader/jquery-ui.css",
+            "//blueimp.github.io/Gallery/css/blueimp-gallery.min.css",
+            "{{app.request.baseUrl}}/plugins/jquery-file-upload/css/jquery.fileupload.css",
+            "{{app.request.baseUrl}}/plugins/jquery-file-upload/css/jquery.fileupload-ui.css"
+        ], function(){
+            $("head").append($("<link rel='stylesheet' href='"+this+"' type='text/css' />"));
+        });
+
+        var tempAsync = $.ajaxSettings.async;
+        $.each([
+            'load-image.all.min.js',
+            'canvas-to-blob.min.js',
+            'jquery.blueimp-gallery.min.js',
+            'jquery.iframe-transport.js',
+            'jquery.fileupload.js',
+            'jquery.fileupload-process.js',
+            'jquery.fileupload-image.js',
+            'jquery.fileupload-validate.js',
+            'jquery.fileupload-ui.js',
+            'jquery.fileupload-jquery-ui.js',
+            'cors/jquery.xdr-transport.js'
+        ], function(){
+            $.ajaxSetup({'async': false});
+            $.getScript("{{app.request.baseUrl}}/plugins/jquery-file-upload/js/" + this);
+        });
+        $.ajaxSetup({'async': tempAsync});
         if (!$.fn.fileupload) {
             return false;
         } else  if (typeof (callbackFileUpload) === "function") {
-            $.widget('blueimp.fileupload', $.blueimp.fileupload, {
-                options: {
-                    messages: {
-                        acceptFileTypes: "{{ 'File type not allowed'|trans }}",
-                        maxFileSize:"{{ 'File is too large'|trans }}",
-                        maxNumberOfFiles:"{{ 'Maximum number of files exceeded'|trans }}",
-                        minFileSize:"{{ 'File is too small'|trans }}",
-                        unknownError:"{{ 'Unknown error'|trans }}",
-                        uploadedBytes:"{{ 'Uploaded bytes exceed file size'|trans }}"
-                    },
-                    fail: function (e, data) {
-                        console.log('fileuploadfail');
-                        $.each(data.files, function (index) {
-                            var error = this.error;
-                            if (error) {
-                                JSErrorModalBox({msg: error});
-                            }
-                        });
-                    },
-                    change: function (e, data) {
-                        console.log('fileuploadchange');
-                        $.each(data.files, function (index) {
-                            var error = this.error;
-                            if (error) {
-                                JSErrorModalBox({msg: error});
-                            }
-                        });
-                    },
-                    processfail: function (e, data) {
-                        console.log('fileuploadsubmit');
-                        $.each(data.files, function (index) {
-                            var error = this.error;
-                            if (error) {
-                                JSErrorModalBox({msg: error});
-                            }
-                        });
-                    }
-                }
-            });
             return callbackFileUpload();
         }
     }
 </script>
+
+<style>
+
+
+</style>

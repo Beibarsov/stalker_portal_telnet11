@@ -37,6 +37,12 @@ class AdminsController extends \Controller\BaseStalkerController {
         $this->checkDropdownAttribute($attribute);
         $this->app['dropdownAttribute'] = $attribute;
 
+        $list = $this->admins_list_json();
+        
+        $this->app['allAdmins'] = $list['data'];
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
+
         $this->app['allAdminGroups'] = $this->db->getAdminGropsList(array('select'=>array('A_G.id as id', "A_G.name as name")));
         if (empty($this->app['reseller'])) {
             $resellers = array(array('id' => '-', 'name' => $this->setLocalization('Empty')));
@@ -54,6 +60,11 @@ class AdminsController extends \Controller\BaseStalkerController {
         if ($no_auth = $this->checkAuth()) {
             return $no_auth;
         }
+        $list = $this->admins_groups_list_json();
+        
+        $this->app['allGroups'] = $list['data'];
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
 
         if (empty($this->app['reseller'])) {
             $resellers = array(array('id' => '-', 'name' => $this->setLocalization('Empty')));
@@ -118,6 +129,12 @@ class AdminsController extends \Controller\BaseStalkerController {
         $this->checkDropdownAttribute($attribute);
         $this->app['dropdownAttribute'] = $attribute;
 
+        $list = $this->resellers_list_json();
+
+        $this->app['allData'] = $list['data'];
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
+
         $this->app['allResellers'] = 1;
 
         return $this->app['twig']->render($this->getTemplateName(__METHOD__));
@@ -139,6 +156,7 @@ class AdminsController extends \Controller\BaseStalkerController {
             'action' => 'setAdminsModal'
         );
 
+               
         $filds_for_select = $this->getAdminsFields();
                 
         $error = "Error";
@@ -172,10 +190,10 @@ class AdminsController extends \Controller\BaseStalkerController {
         } elseif ($query_param['limit']['limit'] == -1) {
             $query_param['limit']['limit'] = FALSE;
         }
-
+        
         $response["data"] = $this->db->getAdminsList($query_param);
         $response["draw"] = !empty($this->data['draw']) ? $this->data['draw'] : 1;
-
+        
         $error = "";
         if ($this->isAjax) {
             $response = $this->generateAjaxResponse($response);
@@ -522,7 +540,7 @@ class AdminsController extends \Controller\BaseStalkerController {
         $error = "Error";
         $param = (empty($param) ? (!empty($this->data)?$this->data: $this->postData) : $param);
 
-        $query_param = $this->prepareDataTableParams($param, array('operations', 'RowOrder', '_'));
+        $query_param = $this->prepareDataTableParams($param, array('operations', 'RowOrder', '_', 'admins_count', 'users_count'));
 
         if (!isset($query_param['where'])) {
             $query_param['where'] = array();
@@ -540,13 +558,6 @@ class AdminsController extends \Controller\BaseStalkerController {
             $query_param['where']['R.`id`'] = $param['id'];
         }
 
-        if (!empty($query_param['like'][$filds_for_select['admins_count']])) {
-            unset($query_param['like'][$filds_for_select['admins_count']]);
-        }
-        if (!empty($query_param['like'][$filds_for_select['users_count']])) {
-            unset($query_param['like'][$filds_for_select['users_count']]);
-        }
-
         $response['recordsTotal'] = $this->db->getResellersTotalRows();
         $response["recordsFiltered"] = $this->db->getResellersTotalRows($query_param['where'], $query_param['like']);
 
@@ -554,13 +565,6 @@ class AdminsController extends \Controller\BaseStalkerController {
             $query_param['limit']['limit'] = 50;
         } elseif ($query_param['limit']['limit'] == -1) {
             $query_param['limit']['limit'] = FALSE;
-        }
-
-        if (($search = array_search('users_count', $query_param['select'])) !== FALSE) {
-            unset($query_param['select'][$search]);
-        }
-        if (($search = array_search('admins_count', $query_param['select'])) !== FALSE) {
-            unset($query_param['select'][$search]);
         }
 
         if (empty($param['id']) && empty($query_param['like'])) {
@@ -573,15 +577,6 @@ class AdminsController extends \Controller\BaseStalkerController {
                 "users_count" => $this->db->getResellerMember('users', NULL),
                 "max_users" => "&#8734;"
             );
-        }
-
-        if (!empty($query_param['order'][$filds_for_select['admins_count']])) {
-            $tmp = $query_param['order'][$filds_for_select['admins_count']];
-            $query_param['order'] = array('admins_count' => $tmp);
-        }
-        if (!empty($query_param['order'][$filds_for_select['users_count']])) {
-            $tmp = $query_param['order'][$filds_for_select['users_count']];
-            $query_param['order'] = array('users_count' => $tmp);
         }
 
         $response["data"] = array_merge($response["data"], $this->db->getResellersList($query_param));

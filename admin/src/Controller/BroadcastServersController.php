@@ -10,8 +10,14 @@ use Symfony\Component\Form\FormFactoryInterface as FormFactoryInterface;
 
 class BroadcastServersController extends \Controller\BaseStalkerController {
 
+    protected $allServerStatus = array();
+
     public function __construct(Application $app) {
         parent::__construct($app, __CLASS__);
+        $this->allServerStatus = array(
+            array('id' => 1, 'title' => $this->setLocalization('off')),
+            array('id' => 2, 'title' => $this->setLocalization('on'))
+        );
     }
 
     // ------------------- action method ---------------------------------------
@@ -37,11 +43,14 @@ class BroadcastServersController extends \Controller\BaseStalkerController {
         $attribute = $this->getServersDropdownAttribute();
         $this->checkDropdownAttribute($attribute);
         $this->app['dropdownAttribute'] = $attribute;
+        
+        $list = $this->broadcast_servers_list_json();
+        
+        $this->app['allData'] = $list['data'];
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
 
-        $this->app['allServerStatus'] = array(
-            array('id' => 1, 'title' => $this->setLocalization('off')),
-            array('id' => 2, 'title' => $this->setLocalization('on'))
-        );
+        $this->app['allServerStatus'] = $this->allServerStatus;
         
         $allZone = $this->db->getAllFromTable('stream_zones');
         $allZoneID = $this->getFieldFromArray($allZone, 'id');
@@ -65,6 +74,12 @@ class BroadcastServersController extends \Controller\BaseStalkerController {
         $attribute = $this->getZoneDropdownAttribute();
         $this->checkDropdownAttribute($attribute);
         $this->app['dropdownAttribute'] = $attribute;
+
+        $list = $this->broadcast_zone_list_json();
+        
+        $this->app['allData'] = $list['data'];
+        $this->app['totalRecords'] = $list['recordsTotal'];
+        $this->app['recordsFiltered'] = $list['recordsFiltered'];
 
         return $this->app['twig']->render($this->getTemplateName(__METHOD__));
     }
@@ -142,6 +157,7 @@ class BroadcastServersController extends \Controller\BaseStalkerController {
             'recordsFiltered' => 0,
             'action' => 'setServerModal'
         );
+
                
         $filds_for_select = $this->getServersFields();
                 
