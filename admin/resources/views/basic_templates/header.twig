@@ -1,0 +1,78 @@
+{# empty Twig template #}
+<!--Start Header-->
+<div id="screensaver">
+    <canvas id="canvas"></canvas>
+    <i class="fa fa-lock" id="screen_unlock"></i>
+</div>
+<div id="modalbox">
+    <div class="devoops-modal">
+        <div class="devoops-modal-header">
+            <div class="modal-header-name">
+                <span>Basic table</span>
+            </div>
+            <div class="box-icons">
+                <a class="close-link">
+                    <i class="fa fa-times"></i>
+                </a>
+            </div>
+        </div>
+        <div class="devoops-modal-inner">
+        </div>
+        <div class="devoops-modal-bottom">
+        </div>
+    </div>
+</div>
+<header class="navbar">
+    <div class="container-fluid expanded-panel">
+        <div class="row">
+            <div id="logo" class="col-xs-2 col-sm-2">
+                <a href="{{app.request.baseUrl}}/"><img src="img/logo.png"></a>
+            </div>
+           <div id="top-panel" class="pull-right  col-xs-10 col-sm-10">
+                <div class="row pull-right ">
+      				<div  class="col-sm-12 no-padding">
+						{% if attribute(app, 'top_bar') is defined %}
+							{% for item in app.top_bar %}
+								<ul class="page-head-elements">
+									<li>
+										{% if item.icon %}
+											<i class="{{ item.icon }}"></i>
+										{% endif %}
+											{{ item.name }}
+												{% if attribute(item, 'add_params') is defined %}
+													{% autoescape false%}
+														{{ item['add_params'] }}
+													{% endautoescape %}
+												{% endif %}                     
+								{% for item_action in item.action %}
+									<li>
+										{% if attribute(item_action, 'self_parent_alias') is defined %}
+											{% set parent_alias = item_action['self_parent_alias'] %}
+										{% elseif attribute(item, 'alias') is defined %}
+											{% set parent_alias = item['alias'] %}
+										{% else %}
+											{% set parent_alias = '' %}
+										{% endif %}
+										<a href="{{ app.request.baseUrl }}/{{ parent_alias ? (parent_alias ~ '/') | trans}}{{ item_action.alias ? item_action.alias }}">
+										{% if item_action.icon %}
+											<i class="{{ item_action.icon }}"></i> 
+										{% endif %}
+										{% if attribute(item_action, 'add_params') is defined %}
+											{% autoescape false%}
+											{{ item_action['add_params'] }}
+											{% endautoescape %}
+										{% endif %}
+										</a>
+									</li>
+								{% endfor %}
+								</ul>
+							{% endfor %}
+					{% endif %}
+					</div>
+				</div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!--End Header-->

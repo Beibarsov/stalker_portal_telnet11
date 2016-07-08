@@ -1,0 +1,11 @@
+
+/.idea
+/admin/vendor
+/admin/composer.lock
+/deploy/composer.lock
+/screenshots
+/deploy/scripts
+/misc/logos
+/misc/audio_covers
+/admin/logs
+/admin/resources/cache
